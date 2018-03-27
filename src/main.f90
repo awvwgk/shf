@@ -20,6 +20,7 @@ program shf
    use printout
 !* quantum mechanical calculations
    use ints
+   use guess
    use scf
    use mbpt
 !* some analysis
@@ -35,7 +36,7 @@ program shf
    integer  :: wftlvl,extmode,acc
    real(wp) :: ethr,pthr,gthr
    logical  :: first,brsym
-   integer  :: maxiter
+   integer  :: maxiter,err
 
 !* molecule data
    integer  :: nat,nel,nbf,nuhf,nocc,nalp,nbet,ndum
@@ -159,9 +160,24 @@ program shf
    &         Pb(nbf,nbf),Fb(nbf,nbf),Cb(nbf,nbf),epsb(nbf), &
    &         source = 0.0_wp )
 
-   call uhf(nat,nbf,nalp,nbet,at,xyz,ethr,pthr,first, &
-        &   chacc,maxiter,diis,maxdiis,startdiis, &
-        &   S,V,T,X,Pa,Pb,H,Fa,Fb,Ca,Cb,eri,epsa,epsb,e)
+!* set up the calculation
+   H=T+V
+!  call prmat(H,nbf,nbf,name='H') !* debug
+
+   call build_orthonormalizer(nbf,S,X,err)
+   if (err.ne.0) call raise('E','building orthonormalizer failed')
+!  call prmat(X,nbf,nbf,name='S^-1/2') !* debug
+
+!* initial guess density (currently hcore guess)
+!  if (first) then ! currently no restart possible for uhf case
+      print'('' * doing hcore guess'')'
+      call hcore_guess(nbf,nalp,H,X,Fa,Ca)
+      call hcore_guess(nbf,nbet,H,X,Fb,Cb)
+!  endif
+
+   call hf(nat,nbf,nalp,nbet,at,xyz,ethr,pthr,first, &
+        &  chacc,maxiter,diis,maxdiis,startdiis, &
+        &  S,V,T,X,Pa,Pb,H,Fa,Fb,Ca,Cb,eri,epsa,epsb,e)
    call prenergy(nat,nbf,nalp,nbet,at,xyz,chacc, &
         &        S,V,T,eri,H,Fa,Fb,Pa,Pb,Ca,Cb,epsa,epsb)
 
@@ -194,9 +210,24 @@ program shf
    &         source = 0.0_wp )
    endif
 
-   call rhf(nat,nbf,nocc,at,xyz,ethr,pthr,first, &
-        &   chacc,maxiter,diis,maxdiis,startdiis, &
-        &   S,V,T,X,P,H,F,C,eri,eps,e)
+!* set up the calculation
+   H=T+V
+!  call prmat(H,nbf,nbf,name='H') !* debug
+
+   call build_orthonormalizer(nbf,S,X,err)
+   if (err.ne.0) call raise('E','building orthonormalizer failed')
+!  call prmat(X,nbf,nbf,name='S^-1/2') !* debug
+
+!* initial guess density (currently hcore guess)
+   if (first) then
+      print'('' * doing hcore guess'')'
+      call hcore_guess(nbf,nocc,H,X,F,C)
+   endif
+
+
+   call hf(nat,nbf,nocc,at,xyz,ethr,pthr,first, &
+        &  chacc,maxiter,diis,maxdiis,startdiis, &
+        &  S,V,T,X,P,H,F,C,eri,eps,e)
    call prenergy(nat,nbf,nocc,nocc,at,xyz,chacc, &
         &        S,V,T,eri,H,F,F,P,P,C,C,eps,eps)
    print'('' * dumping restart file'')'

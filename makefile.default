@@ -50,6 +50,7 @@ OBJS1 := diis.o\
          ints.o\
          stong.o\
          pop.o\
+			guess.o\
          geom.o
 OBJS2 := scf.o\
          mbpt.o\
