@@ -8,7 +8,7 @@ subroutine geoopt_sd(nat,nbf,nocc,at,xyz,zeta,aoc,ng,ityp,first, &
    use precision, only : wp => dp
    use printout, only : prmat
    use ints, only : integrals
-   use scf, only : rhf
+   use scf, only : hf
    implicit none
    integer, intent(in)    :: nat,nbf,nocc
    integer, intent(in)    :: at(nat)
@@ -21,8 +21,11 @@ subroutine geoopt_sd(nat,nbf,nocc,at,xyz,zeta,aoc,ng,ityp,first, &
    real(wp),intent(in)    :: ethr,pthr,gthr
    integer, intent(in)    :: maxiter,maxdiis,startdiis
    real(wp),intent(inout) :: C(nbf,nbf)
-   real(wp),intent(out)   :: S(nbf,nbf),V(nbf,nbf),T(nbf,nbf),X(nbf,nbf)
-   real(wp),intent(out)   :: F(nbf,nbf),H(nbf,nbf),P(nbf,nbf)
+   real(wp),intent(out)   :: S(nbf,nbf),V(nbf,nbf),T(nbf,nbf)
+   real(wp),intent(in)    :: X(nbf,nbf)
+   real(wp),intent(in)    :: H(nbf,nbf)
+   real(wp),intent(out)   :: F(nbf,nbf)
+   real(wp),intent(out)   :: P(nbf,nbf)
    real(wp),intent(out)   :: eri(nbf*(nbf+1)*(nbf*(nbf+1)/2+1)/2),eps(nbf)
    real(wp),intent(out)   :: e,g(3,nat)
    character(len=*),intent(in) :: acc
@@ -41,18 +44,18 @@ subroutine geoopt_sd(nat,nbf,nocc,at,xyz,zeta,aoc,ng,ityp,first, &
 !  call prmat(V,nbf,nbf,name='V')
 !  call prmat(T,nbf,nbf,name='T')
 
-   call rhf(nat,nbf,nocc,at,xyz,ethr,pthr,first, &
-        &   acc,maxiter,diis,maxdiis,startdiis, &
-        &   S,V,T,X,P,H,F,C,eri,eps,eold)
+   call hf(nat,nbf,nocc,at,xyz,ethr,pthr,first, &
+        &  acc,maxiter,diis,maxdiis,startdiis, &
+        &  S,V,T,X,P,H,F,C,eri,eps,eold)
    iter = 0
    opt: do
       iter = iter+1
       if (iter.gt.maxiter) call raise('E','optimization did not converge')
       call rhf_numgrad(nat,nbf,nocc,at,xyz,zeta,aoc,ng,ityp,ethr,C,g)
       xyz = xyz + eta * g
-      call rhf(nat,nbf,nocc,at,xyz,ethr,pthr,first, &
-           &   acc,maxiter,diis,maxdiis,startdiis, &
-           &   S,V,T,X,P,H,F,C,eri,eps,e)
+      call hf(nat,nbf,nocc,at,xyz,ethr,pthr,first, &
+           &  acc,maxiter,diis,maxdiis,startdiis, &
+           &  S,V,T,X,P,H,F,C,eri,eps,e)
       gnorm = sqrt(sum( g**2 ))
       if (gnorm.gt.500.0_wp) call raise('W','|G|>500, something went wrong!')
       print'(a)'
