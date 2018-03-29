@@ -18,6 +18,7 @@ program shf
 !* input/output modules
    use readin
    use printout
+   use timings
 !* quantum mechanical calculations
    use ints
    use guess
@@ -72,6 +73,10 @@ program shf
    external wSIGTERM,wSIGINT
    call signal(2,wSIGINT)
    call signal(15,wSIGTERM)
+
+   call start_timing_run
+   call init_timing(10)
+   call start_timing(1)
 
 !* init section for intermediate logicals
    first = .true.
@@ -232,7 +237,7 @@ program shf
         &        S,V,T,eri,H,F,F,P,P,C,C,eps,eps)
    print'('' * dumping restart file'')'
    call prrestart('restart',nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C,chacc)
-   
+
    print'(a)'
    print'('' * doing Mulliken population analysis'')'
    call mulliken(nat,nbf,at,aoc,S,P,P,z)
@@ -243,6 +248,11 @@ program shf
    call loewdin(nat,nbf,at,aoc,S,P,P,X,z)
    call prchrg(nat,at,z,chacc)
 
+!* experimental direct scf
+!  call hf(nat,nbf,nocc,at,xyz,ethr,pthr,first, &
+!       &  chacc,maxiter,diis,maxdiis,startdiis, &
+!       &  zeta,aoc,ng,ityp,S,X,P,H,F,C,eps,e)
+   
 !* second order Møller-Plesset many-body pertubation theory
    if (wftlvl.eq.1) then !* MP2
    call mp2(nbf,nocc,C,eri,eps,ecorr,chacc)
@@ -287,6 +297,14 @@ program shf
    print'(''=========================================='')'
    print'('' TOTAL ENERGY'',f27.'//chacc//')',e
    print'(''=========================================='')'
+
+!* give some statistics on timings and stuff
+   print'(a)'
+   call stop_timing_run
+   call stop_timing(1)
+   call prdate('E')
+   call prtiming(1)
+   print'(a)'
 
    call terminate(0)
 end program shf
