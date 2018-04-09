@@ -1,10 +1,25 @@
 #!/bin/env make
 # 
-# created by Sebastian Ehlert in March 2018 (v 2.1)
-# 2.0: recreated from scratch
+# version 2.2 (April 2018)
+# 2.0: created by Sebastian Ehlert in March 2018
 # 2.1: refined the generation of dependencies, since it crashed if not
 #      done in the main directory
+# 2.2: added support for GNU compiler and expanded Makefile for C/C++
 #
+###------------------------------------------------------------------------###
+# a nice trick to print all 'important' targets this Makefile can produce
+.PHONY: help
+
+# would be made by default if there is no .DEFAULT_GOAL set
+help:
+	@echo "=========================================="
+	@echo " Makefile by Sebastian Ehlert v2.2 (1804)"
+	@echo "=========================================="
+	@echo "This Makefile kindly provides to you:"                     && \
+	$(MAKE) --print-data-base --question |                               \
+	awk '/^[^.%][-A-Za-z0-9]*:/ {print substr($$1, 1, length($$1)-1)}' | \
+	sort | pr --omit-pagination --width=80 --columns=4
+
 ##############################################################################
 ## put all you sources here, if you do not know how this Makefiles work,    ##
 ## only edit here:                                                          ##
@@ -32,6 +47,14 @@ USE_DEPENDENCIES := yes
 # also make the dependency files Makefile dependent
 DEP_MAKEFILE_DEP := no
 
+# sometimes it is not desirable to create a library, or even a binary
+# use LIB_ONLY to create only the library and PROG_ONLY to ommit the library
+BUILD_MODE  := default
+
+# for big libraries it is sometimes faster to recreate the library then
+# replacing some members, but this matters only for *really big* libraries
+REBUILD_LIB := no
+
 ###------------------------------------------------------------------------###
 # put all sources needed for the build here
 # the source holding your main-program should go in OBJSP
@@ -45,7 +68,8 @@ OBJS0 := help.o\
          signal.o\
          strings.o\
          system_tools.o\
-         misc.o
+         misc.o\
+			timings.o
 OBJS1 := diis.o\
          ints.o\
          stong.o\
@@ -60,7 +84,7 @@ OBJS3 := precision.o\
          atomdata.o
 
 # put all include files here (currently not used)
-INC := 
+INC := boysf_grid.inc
 
 # libraries, do not put the program name itself here
 LIBS := mkl_blas95_lp64\
@@ -76,6 +100,7 @@ MAKEDIR := $(MAINDIR)
 # put all files to appropiate places
 EXEDIR  := $(MAINDIR)/exe
 LIBDIR  := $(MAINDIR)/lib
+SRCDIR  := $(MAINDIR)/src
 INCDIR  := $(MAINDIR)/include
 MODDIR  := $(MAINDIR)/modules
 # you can use a local build directory to separate the build
@@ -96,15 +121,21 @@ vpath % $(SRCDIR)
 ifeq ($(OSTYPE),LINUXI)
 FC := ifort
 CC := icc
+CXX := $(CC)
 
 # compile flags
+# FORTRAN
 FCFLAGS := -O -axAVX -qopenmp
 FCFLAGS += -module $(MODDIR)
 FCFLAGS += -I$(INCDIR)                       \
            -I$(MKLROOT)/include/intel64/lp64 \
            -I$(MKLROOT)/include
+# C
 CCFLAGS := -O -DLINUX
 CCFLAGS += -D_Float128=__float128
+# C++
+CXXFLAGS := -O
+CXXFLAGS += -std=c++11
 # check for debug build
 ifeq ($(DEBUG_BUILD),yes)
 FCFLAGS += -g -traceback
@@ -131,19 +162,62 @@ LDFLAGS += -Wl,--start-group     \
            -Wl,--end-group
 
 endif # LINUXI
+
+###------------------------------------------------------------------------###
+# GNU compiler
+ifeq ($(OSTYPE),LINUXG)
+FC := gfortran
+CC := gcc
+CXX := g++
+
+# compile flags
+# C++
+CXXFLAGS := -O
+#CXXFLAGS += -std=c++11
+# FORTRAN
+FCFLAGS := -O -fopenmp
+#FCFLAGS += -std=f2003
+FCFLAGS += -J$(MODDIR)
+FCFLAGS += -I$(INCDIR)
+# C
+CCFLAGS := -O -DLINUX
+#CCFLAGS += -std=c11
+# check for debug build
+ifeq ($(DEBUG_BUILD),yes)
+FCFLAGS += -g -fbacktrace
+CCFLAGS += -g -DEBUG
+endif # DEBUG
+
+# linker
+LD := ld
+# general flags for linking, this is build incremental to get an overview
+LDFLAGS := -static-libgfortran -fopenmp
+# add path to libraries
+LDFLAGS += -L$(LIBDIR)
+
+endif # LINUXG
+
 ###------------------------------------------------------------------------###
 # set the targets
-.PHONY: all lib prog setup depend clean veryclean
+.PHONY: all library program setup depend
 
 # this is the first, so it will be made by default
-all: setup lib prog
+all: setup
+ifneq ($(BUILD_MODE),PROG_ONLY)
+all: library
+endif # BUILD_MODE
+ifneq ($(BUILD_MODE),LIB_ONLY)
+all: program
+endif # BUILD_MODE
 
 # we can also enforce it by
 .DEFAULT_GOAL=all
 
 ###------------------------------------------------------------------------###
 # generate the name of the program and the library
-LIBNAME  := $(LIBDIR)/lib$(NAME).a
+ifneq ($(BUILD_MODE),PROG_ONLY)
+   LIBNAME := $(LIBDIR)/lib$(NAME).a
+endif # BUILD_MODE
 PROGNAME := $(EXEDIR)/$(NAME)
 ifeq ($(BUILD_IN_BIN),yes)
    PROGNAME := $(HOME)/bin/$(NAME)
@@ -159,22 +233,31 @@ OBJS2 := $(addprefix $(OUTDIR)/,$(OBJS2))
 OBJS1 := $(addprefix $(OUTDIR)/,$(OBJS1))
 OBJS0 := $(addprefix $(OUTDIR)/,$(OBJS0))
 OBJSP := $(addprefix $(OUTDIR)/,$(OBJSP))
+
 # libraries
-LIBS  := $(addprefix -l,$(NAME) $(LIBS))
+ifneq ($(BUILD_MODE),PROG_ONLY)
+    LIBS := $(NAME) $(LIBS)
+endif # BUILD_MODE
+LIBS  := $(addprefix -l,$(LIBS))
+
 # we merge all files for convinience
 OBJS:= $(OBJSP) $(OBJS3) $(OBJS2) $(OBJS1) $(OBJS0)
+ifeq ($(BUILD_MODE),PROG_ONLY)
+   OBJSP := $(OBJS)
+endif # BUILD_MODE
+
 # everything should also dependent on the local Makefile
 ifeq ($(MAKEFILE_DEP),yes)
-   MAKEDEP := Makefile
+   MAKEDEP := $(filter-out %.d, $(MAKEFILE_LIST))
 endif # DEP
 ifeq ($(DEP_MAKEFILE_DEP),yes)
-   DEPMAKEDEP := Makefile
+   DEPMAKEDEP := $(filter-out %.d, $(MAKEFILE_LIST))
 endif # DEP
 
 ###------------------------------------------------------------------------###
 # set up the targets for all
-lib: $(LIBNAME)
-prog: $(PROGNAME)
+library: $(LIBNAME)
+program: $(PROGNAME)
 setup: $(EXEDIR) $(LIBDIR) $(MODDIR) $(OUTDIR) $(DEPDIR)
 
 ifeq ($(USE_DEPENDENCIES),yes)
@@ -183,10 +266,20 @@ endif # DEP
 
 ###------------------------------------------------------------------------###
 # define how to actually generate the library and the program
+ifeq ($(REBUILD_LIB),yes)
+$(LIBNAME): $(OBJS3) $(OBJS2) $(OBJS1) $(OBJS0)
+	@echo "recreating $@"                   && \
+	$(RM) $@                                && \
+	$(AR) $(ARFLAGS) $@ $^                  && \
+	echo "finished building $@ successfully"
+
+else
 $(LIBNAME): $(OBJS3) $(OBJS2) $(OBJS1) $(OBJS0)
 	@echo "creating $@"                     && \
-	$(AR) rv $@ $?                          && \
+	$(AR) $(ARFLAGS) $@ $?                  && \
 	echo "finished building $@ successfully"
+
+endif
 
 # build everything together
 $(PROGNAME): $(LIBNAME) $(OBJSP)
@@ -204,7 +297,7 @@ $(OUTDIR)/%.o: %.f $(MAKEDEP)
 	@echo "making $@ from $<" && \
 	$(FC) $(FCFLAGS) -c $< -o $@
 
-$(OUTDIR)/%.o: %.f90 $(DEPDIR)/%.d $(MAKEDEP)
+$(OUTDIR)/%.o: %.f90 $(MAKEDEP)
 	@echo "making $@ from $<" && \
 	$(FC) $(FCFLAGS) -c $< -o $@
 
@@ -212,13 +305,18 @@ $(OUTDIR)/%.o: %.c $(MAKEDEP)
 	@echo "making $@ from $<" && \
 	$(CC) $(CCFLAGS) -c $< -o $@
 
+$(OUTDIR)/%.o: %.cc $(MAKEDEP)
+	@echo "making $@ from $<" && \
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 ifeq ($(USE_DEPENDENCIES),yes)
 # this is a crutial part of this Makefile!
 -include $(DEPS)
 
+$(OUTDIR)/%.o: $(DEPDIR)/%.d
+
 # now for the dependencies,
-# I use a script hacked together in ruby (v 2.5.0) for this job
+# I use a script hacked together in ruby (v 2.5.0) for FORTRAN codes
 $(DEPDIR)/%.d: %.f90 $(DEPMAKEDEP)
 	@echo "generating dependencies for $<"    && \
 	deps=`ruby $(MAINDIR)/depend.rb $<`       && \
@@ -229,17 +327,27 @@ $(DEPDIR)/%.d: %.f $(DEPMAKEDEP)
 	deps=`ruby $(MAINDIR)/depend.rb $<`       && \
 	echo "\$$(OUTDIR)/$*.o:$$deps" > $@
 
-# deactivate dependency generation for C-code
-$(DEPDIR)/%.d: %.c
-	@echo "generating no dependencies for $<" && \
-	echo "\$$(OUTDIR)/$*.o:" > $@
+# no hacks needed for C/C++ dependencies
+$(DEPDIR)/%.d: %.c $(DEPMAKEDEP)
+	@echo "generating dependencies for $<" && \
+	$(CC) $(CPPFLAGS) -MM $< > $@
+
+$(DEPDIR)/%.d: %.cc $(DEPMAKEDEP)
+	@echo "generating dependencies for $<" && \
+	$(CXX) $(CPPFLAGS) -MM $< > $@
 
 endif # DEP
 
 ###------------------------------------------------------------------------###
 # clean up, at the right places
+.PHONY: clean distclean veryclean
+
 clean:
 	$(RM) $(OUTDIR)/*.o $(MODDIR)/*.mod $(PROGNAME) $(LIBNAME)
+
+# also remove the binary
+distclean: clean
+	$(RM) $(PROGNAME)
 
 # in case you use the dependency build you can get rid of those files to
 veryclean: clean
