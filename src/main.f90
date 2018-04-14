@@ -25,6 +25,7 @@ program shf
    use guess
    use scf
    use mbpt
+   use cc
 
 !* some analysis
    use pop
@@ -58,7 +59,7 @@ program shf
    real(wp),allocatable :: X(:,:)
    real(wp),allocatable :: F(:,:),H(:,:),P(:,:),C(:,:)
    real(wp),allocatable :: eps(:),z(:)
-!  real(wp),allocatable :: eri(:,:,:,:)
+   real(wp),allocatable :: tei(:,:,:,:)
    real(wp),allocatable :: Fa(:,:),Pa(:,:),Ca(:,:)
    real(wp),allocatable :: Fb(:,:),Pb(:,:),Cb(:,:)
    real(wp),allocatable :: epsa(:),epsb(:)
@@ -182,15 +183,19 @@ program shf
 !* initial guess density (currently hcore guess)
 !  if (first) then ! currently no restart possible for uhf case
       if (nalp.eq.nbet) then
+         pthr = 10._wp**(-acc+2) ! P converges slowly for this kind of guess
          print'('' * doing hcore guess for alpha MOs'')'
+         call hcore_guess(nbf,nalp,H,X,Fa,Ca)
+         print'('' * doing really bad orthonormalizer guess for beta MOs'')'
+         Cb = X ! use really bad orthonormalizer guess to break symmetry
+         ! DIIS is really bad for this kind of guess
+         if (diis) then
+            call raise('W','DIIS was deactivated by orthonormalizer guess')
+            diis = .false.
+         endif
       else
          print'('' * doing hcore guess'')'
-      endif
-      call hcore_guess(nbf,nalp,H,X,Fa,Ca)
-      if (nalp.eq.nbet) then
-         print'('' * doing really bad orthormalizer guess for beta MOs'')'
-         Cb = X ! use really bad orthonormalizer guess to break symmetry
-      else
+         call hcore_guess(nbf,nalp,H,X,Fa,Ca)
          call hcore_guess(nbf,nbet,H,X,Fb,Cb)
       endif
 !  endif
@@ -274,14 +279,29 @@ program shf
 !       &  chacc,maxiter,diis,maxdiis,startdiis, &
 !       &  zeta,aoc,ng,ityp,S,X,P,H,F,C,eps,e)
    
+   if (wftlvl.ge.1) then
+!     print'('' * doing Θ(N⁸) integral transformation'')'
+!     call teitrafo_N8(nbf,eri,C)
+      print'('' * doing Θ(N⁵) integral transformation'')'
+      call teitrafo(nbf,eri,C)
+   endif
+
 !* second order Møller-Plesset many-body pertubation theory
-   if (wftlvl.eq.1) then !* MP2
-   call mp2(nbf,nocc,C,eri,eps,ecorr,chacc)
-   e = e + ecorr
+   if (wftlvl.ge.1) then !* MP2
+      call mp2(nbf,nocc,eri,eps,ecorr,chacc)
+      e = e + ecorr
    endif !* MP2
 
-!  if (wftlvl.ge.2) then !* CCSD
-!  call ccsd(nbf,nocc,nvir,F,eri,ethr,chacc,maxiter,ecorr)
+   if (wftlvl.ge.2) then !* CCD
+      if (allocated(F)) deallocate(F)
+      allocate( F(2*nbf,2*nbf),tei(2*nbf,2*nbf,2*nbf,2*nbf),  &
+      &         source = 0.0_wp )
+      call chem2phys(nbf,eri,tei)
+      call onetrafo(nbf,H,C)
+      call spinfockian(nbf,nel,F,H,tei)
+      call prmat(F,2*nbf,2*nbf,name='Spin Fockian')
+      call ccd(nbf,nel,F,tei,ethr,chacc,maxiter,ecorr)
+   endif
 !  if (wftlvl.eq.3) then !* CCSD(T)
 !  call ccpt(...)
 !  endif !* CCSD(T)

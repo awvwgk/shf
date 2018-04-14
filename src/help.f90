@@ -31,8 +31,8 @@ subroutine help
 !  print'(3x,''    --scs-mp2     '','// &
 !  &      'x,''use the spin compound scaled MP2 variant'')'
 
-!  print'(3x,''    --ccsd        '','// &
-!  &      'x,''do coupled cluster, with single and double excitation'')'
+   print'(3x,''    --ccd         '','// &
+   &      'x,''do coupled cluster with double excitation (untested)'')'
 
 !  print'(3x,''    --ccsd(t)     '','// &
 !  &      'x,''include also triple excitation pertubatively'')'

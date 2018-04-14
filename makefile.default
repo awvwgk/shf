@@ -78,6 +78,7 @@ OBJS1 := diis.o\
          geom.o
 OBJS2 := scf.o\
          mbpt.o\
+         cc.o\
          opt.o
 # to be save, put your modules here
 OBJS3 := precision.o\

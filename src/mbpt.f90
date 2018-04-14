@@ -12,15 +12,13 @@ contains
 !  εij = Σab (T(ij,ab) - T(ij,ba))·(ia|jb)
 !  εîj = Σâb T(îj,âb)·(ia|ĵb)
 !  T(ij,ab) = (ia|jb)/(εi+εj+εa+εb)
-subroutine mp2(nbf,nocc,C,eri,eps,e,acc)
+subroutine mp2(nbf,nocc,eri,eps,e,acc)
    use precision, only : wp => dp
-   use ints,      only : teitrafo
    use misc,      only : idx
    implicit none
    integer, intent(in)    :: nbf
    integer, intent(in)    :: nocc
    real(wp),intent(in)    :: eps(nbf)
-   real(wp),intent(in)    :: C(nbf,nbf)
    real(wp),intent(inout) :: eri(nbf*(nbf+1)/2*(nbf*(nbf+1)/2+1)/2)
    real(wp),intent(inout) :: e
    character(len=*),intent(in) :: acc
@@ -34,10 +32,6 @@ subroutine mp2(nbf,nocc,C,eri,eps,e,acc)
    print'(72(''-''))'
    print'('' second order Møller-Plesset calculation'')'
 
-!  print'('' * doing Θ(N⁸) integral transformation'')'
-!  call teitrafo_N8(nbf,eri,C)
-   print'('' * doing Θ(N⁵) integral transformation'')'
-   call teitrafo(nbf,eri,C)
    print'(''----[i]-----[j]-------------[pair energy]-''30(''-''))'
    do i = 1, nocc
       do j = 1, i
