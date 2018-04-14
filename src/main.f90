@@ -293,6 +293,7 @@ program shf
    endif !* MP2
 
    if (wftlvl.ge.2) then !* CCD
+      e = e - ecorr ! remov MP2 energy
       if (allocated(F)) deallocate(F)
       allocate( F(2*nbf,2*nbf),tei(2*nbf,2*nbf,2*nbf,2*nbf),  &
       &         source = 0.0_wp )
@@ -301,11 +302,8 @@ program shf
       call spinfockian(nbf,nel,F,H,tei)
       call prmat(F,2*nbf,2*nbf,name='Spin Fockian')
       call ccd(nbf,nel,F,tei,ethr,chacc,maxiter,ecorr)
-   endif
-!  if (wftlvl.eq.3) then !* CCSD(T)
-!  call ccpt(...)
-!  endif !* CCSD(T)
-!  endif !* CCSD
+      e = e + ecorr
+   endif !* CCD
    
    endif
    

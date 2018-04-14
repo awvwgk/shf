@@ -1,7 +1,7 @@
 module cc
 
    interface ccd
-      module procedure solve_ccd
+   module procedure solve_ccd
    end interface ccd
 
 contains
@@ -81,6 +81,7 @@ subroutine solve_ccd(nbf,nel,F,tei,ethr,acc,maxiter,e)
    integer  :: i,j,k,l
    integer  :: a,b,c,d
    real(wp) :: eold
+   real(wp) :: rmsd
    real(wp),allocatable :: D2(:,:,:,:)
    real(wp),allocatable :: T2(:,:,:,:)
    real(wp),allocatable :: TS(:,:,:,:)
@@ -88,6 +89,10 @@ subroutine solve_ccd(nbf,nel,F,tei,ethr,acc,maxiter,e)
    real(wp),allocatable :: Fki(:,:)
    real(wp),allocatable :: Wklij(:,:,:,:)
    real(wp),allocatable :: Wkbcj(:,:,:,:)
+
+   write(id,'(a)')
+   write(id,'(72(''-''))')
+   write(id,'('' iterative Coupled Cluster Doubles calculation'')')
 
    nvir = 2*nbf - nel
 
@@ -114,15 +119,16 @@ subroutine solve_ccd(nbf,nel,F,tei,ethr,acc,maxiter,e)
    eold = ccd_energy(nbf,nel,nvir,tei,T2)
    iter = 0
    
-   write(id,'(72(''-''))')
-   write(id,'('' GUESS MP2 ENERGY'',f53.'//acc//')') eold
-   write(id,'(72(''-''))')
-   write(id,'(a)')
+!  write(id,'(72(''-''))')
+!  write(id,'('' GUESS MP2 ENERGY'',f53.'//acc//')') eold
+!  write(id,'(72(''-''))')
+!  write(id,'(a)')
 
    write(id,'(1(''-'')''[ITER]'')',   advance='no')
    write(id,'(9(''-'')''[E(CCD)]'')', advance='no')
    write(id,'(8(''-'')''[ΔE(CCD)]'')',advance='no')
-   write(id,'(30(''-''))')
+   write(id,'(7(''-'')''[RMS(T)]'')', advance='no')
+   write(id,'(15(''-''))')
    write(id,'(x,i5,x,f16.'//acc//')'),iter,eold
    cciter: do
       iter = iter+1
@@ -137,10 +143,12 @@ subroutine solve_ccd(nbf,nel,F,tei,ethr,acc,maxiter,e)
       call build_T2(nbf,nel,nvir,F,tei,TS,Fac,Fki,Wklij,Wkbcj,D2,T2)
 
       e = ccd_energy(nbf,nel,nvir,tei,T2)
+      rmsd = sqrt( sum( (T2-TS)**2 ) )
 
       write(id,'(x,i5)',advance='no') iter
       write(id,'(x,f16.'//acc//')',advance='no') e
       write(id,'(x,f16.'//acc//')',advance='no') e-eold
+      write(id,'(x,f14.'//acc//')',advance='no') rmsd
       write(id,'(a)')
       
       if (abs(e-eold).lt.ethr) exit cciter
@@ -181,15 +189,13 @@ pure subroutine build_T2(nbf,nel,nvir,F,tei,TS,Fac,Fki,Wklij,Wkbcj,D2,T2)
       do j = 1, nel
          do a = 1, nvir
             do b = 1, nvir
-            ! P-(ab) sum_e Fae t(eb,ij)
                do c = 1, nvir
                   T2(a,b,i,j) = T2(a,b,i,j) + Fac(a,c) * TS(c,b,i,j)
                   T2(a,b,i,j) = T2(a,b,i,j) - Fac(b,c) * TS(c,a,i,j)
                enddo
-            ! P-(ij) sum_e Fmi t(ab,mj)
                do k = 1, nel
-                  T2(a,b,i,j) = T2(a,b,i,j) + Fki(k,i) * TS(a,b,k,j)
-                  T2(a,b,i,j) = T2(a,b,i,j) - Fki(k,j) * TS(a,b,k,i)
+                  T2(a,b,i,j) = T2(a,b,i,j) - Fki(k,i) * TS(a,b,k,j)
+                  T2(a,b,i,j) = T2(a,b,i,j) + Fki(k,j) * TS(a,b,k,i)
                enddo
                do k = 1, nel
                   do l = 1, nel
@@ -206,10 +212,10 @@ pure subroutine build_T2(nbf,nel,nvir,F,tei,TS,Fac,Fki,Wklij,Wkbcj,D2,T2)
                do k = 1, nel
                   do c = 1, nvir
                      T2(a,b,i,j) = T2(a,b,i,j)  &
-                     &   + Wkbcj(k,b,c,j) * TS(a,c,i,l)  &
-                     &   - Wkbcj(k,a,c,j) * TS(b,c,i,l)  &
-                     &   - Wkbcj(k,b,c,i) * TS(a,c,j,l)  &
-                     &   + Wkbcj(k,a,c,i) * TS(b,c,j,l)
+                     &   + Wkbcj(k,b,c,j) * TS(a,c,i,k)  &
+                     &   - Wkbcj(k,a,c,j) * TS(b,c,i,k)  &
+                     &   - Wkbcj(k,b,c,i) * TS(a,c,j,k)  &
+                     &   + Wkbcj(k,a,c,i) * TS(b,c,j,k)
                   enddo
                enddo
             enddo
@@ -229,21 +235,21 @@ pure subroutine build_Fki(nbf,nel,nvir,F,tei,T2,Fki)
    integer, intent(in)  :: nvir
    real(wp),intent(in)  :: F(2*nbf,2*nbf)
    real(wp),intent(in)  :: tei(2*nbf,2*nbf,2*nbf,2*nbf)
-   real(wp),intent(in)  :: T2(nel,nel,nvir,nvir)
+   real(wp),intent(in)  :: T2(nvir,nvir,nel,nel)
    real(wp),intent(out) :: Fki(nel,nel)
 
    integer  :: i,j,k,l
    integer  :: a,b,c,d
 
    Fki = F(1:nel,1:nel)
-   do k = 1, nvir
-      do i = 1, nvir
+   do k = 1, nel
+      do i = 1, nel
          if (k.eq.i) Fki(k,i) = 0.0_wp
          do l = 1, nel
             do c = 1, nvir
                do d = 1, nvir
                   Fki(k,i) = Fki(k,i) + 0.5_wp * tei(k,l,c+nel,d+nel)  &
-                  &                     * T2(i,l,c,d)
+                  &                     * T2(c,d,i,l)
                enddo
             enddo
          enddo
@@ -260,7 +266,7 @@ pure subroutine build_Fac(nbf,nel,nvir,F,tei,T2,Fac)
    integer, intent(in)  :: nvir
    real(wp),intent(in)  :: F(2*nbf,2*nbf)
    real(wp),intent(in)  :: tei(2*nbf,2*nbf,2*nbf,2*nbf)
-   real(wp),intent(in)  :: T2(nel,nel,nvir,nvir)
+   real(wp),intent(in)  :: T2(nvir,nvir,nel,nel)
    real(wp),intent(out) :: Fac(nvir,nvir)
 
    integer  :: i,j,k,l
@@ -274,7 +280,7 @@ pure subroutine build_Fac(nbf,nel,nvir,F,tei,T2,Fac)
             do l = 1, nel
                do d = 1, nvir
                   Fac(a,c) = Fac(a,c) - 0.5_wp * tei(k,l,c+nel,d+nel)  &
-                  &                     * T2(k,l,a,d)
+                  &                     * T2(a,d,k,l)
                enddo
             enddo
          enddo
@@ -291,7 +297,7 @@ pure subroutine build_Wklij(nbf,nel,nvir,F,tei,T2,Wklij)
    integer, intent(in)  :: nvir
    real(wp),intent(in)  :: F(2*nbf,2*nbf)
    real(wp),intent(in)  :: tei(2*nbf,2*nbf,2*nbf,2*nbf)
-   real(wp),intent(in)  :: T2(nel,nel,nvir,nvir)
+   real(wp),intent(in)  :: T2(nvir,nvir,nel,nel)
    real(wp),intent(out) :: Wklij(nel,nel,nel,nel)
 
    integer  :: i,j,k,l
@@ -305,7 +311,7 @@ pure subroutine build_Wklij(nbf,nel,nvir,F,tei,T2,Wklij)
                do c = 1, nvir
                   do d = 1, nvir
                      Wklij(k,l,i,j) = Wklij(k,l,i,j)  &
-                     &   + 0.5 * tei(k,l,c+nel,d+nel) * T2(i,j,c,d)
+                     &   + 0.5 * tei(k,l,c+nel,d+nel) * T2(c,d,i,j)
                   enddo
                enddo
             enddo
@@ -323,7 +329,7 @@ pure subroutine build_Wkbcj(nbf,nel,nvir,F,tei,T2,Wkbcj)
    integer, intent(in)  :: nvir
    real(wp),intent(in)  :: F(2*nbf,2*nbf)
    real(wp),intent(in)  :: tei(2*nbf,2*nbf,2*nbf,2*nbf)
-   real(wp),intent(in)  :: T2(nel,nel,nvir,nvir)
+   real(wp),intent(in)  :: T2(nvir,nvir,nel,nel)
    real(wp),intent(out) :: Wkbcj(nel,nvir,nvir,nel)
 
    integer  :: i,j,k,l
@@ -337,7 +343,7 @@ pure subroutine build_Wkbcj(nbf,nel,nvir,F,tei,T2,Wkbcj)
                do l = 1, nel
                   do d = 1, nvir
                      Wkbcj(k,b,c,j) = Wkbcj(k,b,c,j)  &
-                     &   + 0.5 * tei(k,l,c+nel,d+nel) * T2(j,l,d,b)
+                     &   + 0.5 * tei(k,l,c+nel,d+nel) * T2(d,b,j,l)
                   enddo
                enddo
             enddo
@@ -361,8 +367,8 @@ function ccd_energy(nbf,nel,nvir,tei,T2) result(e)
    integer  :: iajb,ibja
    e = 0.0_wp
    do i = 1, nel
-      do a = 1, nvir
-         do j = 1, nel
+      do j = 1, nel
+         do a = 1, nvir
             do b = 1, nvir
                e = e + 0.25_wp * tei(a+nel,b+nel,i,j) * T2(a,b,i,j)
             enddo
