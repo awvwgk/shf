@@ -45,31 +45,30 @@ subroutine help
 end subroutine help
 
 subroutine banner
-   print'(''=========================================='')'
-   print'('' simple HF by SAW      version 0.0 (1803)'')'
-   print'(''=========================================='')'
+   use iso_fortran_env, only : output_unit
+   write(output_unit,'(72(''=''))')
+   write(output_unit,'(x,''simple HF by Sebastian Ehlert'')',advance='no')
+   write(output_unit,'(23x,''version 1.0 (1804)'')')
+   write(output_unit,'(72(''=''))')
 end subroutine banner
 
 subroutine credits
    call banner
    print'(a)'
 
-   print'(a)',&
-   '------------------------------------------------------------------------'
+   print'(72(''-''))'
    print'(x,''This work is mainly inspired by'','// &
    &     'x,''D. Crawford’s programming project.'')'
    print'(x,''see:'','//&
    & 'x,''http://sirius.chem.vt.edu/wiki/doku.php?id=crawdad:programming'')'
 
-   print'(a)',&
-   '------------------------------------------------------------------------'
+   print'(72(''-''))'
    print'(x,''and of course:'','// &
    &   '/,x,''A. Szabo, N. Ostlund, Modern Quantum Chemistry:'','//&
    &     'x,''Introduction to'','//&
    &   '/,x,''Advanced Electronic Structure Theory,'','//&
    &     'x,''Dover Publications, 1989.'')'
 
-   print'(a)',&
-   '------------------------------------------------------------------------'
+   print'(72(''-''))'
 
 end subroutine credits

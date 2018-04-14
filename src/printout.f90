@@ -1,6 +1,11 @@
 module printout
 
-   private :: ic,id,prsymat,prgemat ! for use in prmat
+   interface prmat
+!  module procedure prgemat_e
+!  module procedure prsymat_e
+   module procedure prgemat_f
+   module procedure prsymat_f
+   end interface prmat
 
 contains
 
@@ -51,7 +56,7 @@ subroutine prenergy(nat,nbf,nalp,nbet,at,xyz,acc, &
 !  print'('' Hartree energy      :'',f18.'//acc//')',ej
 !  print'('' Fock exchange energy:'',f18.'//acc//')',ex
 
-   print'(''------------------------------------------'')'
+   print'(72(''-''))'
 
 end subroutine prenergy
 
@@ -73,9 +78,9 @@ subroutine prinput(fname,nat,nel,nocc,nalp,nbet,nbf,at,xyz,zeta,aoc,ng,brsym)
    real(wp) :: com(3)
    integer :: i
 
-   print'(''------------------------------------------'')'
+   print'(72(''-''))'
    print'('' Geometry read from'',x,a)',fname
-   print'(''------------------------------------------'')'
+   print'(72(''-''))'
    print'('' Number of atoms     :'',i18)',nat
    print'('' Number of electrons :'',i18)',nel
    if(brsym) then
@@ -86,15 +91,15 @@ subroutine prinput(fname,nat,nel,nocc,nalp,nbet,nbf,at,xyz,zeta,aoc,ng,brsym)
    endif
    print'('' Number of AOs       :'',i18)',nbf
    print'('' Number of prim. AOs :'',i18)',sum(ng)
-   print'(''-[#]---[Z]----------[x]------[y]------[z]-'')'
+   print'(''-[#]---[Z]----------[x]------[y]------[z]-''30(''-''))'
    do i = 1, nat
       print'(i3,x,i5,x,a2,x,3(x,f8.3))', &
       &  i,at(i),capitalize(esym(at(i))),xyz(1:3,i)
    enddo
    call comshift(nat,at,xyz,com)
-!  print'(''--------------------[x]------[y]------[z]-'')'
+!  print'(''--------------------[x]------[y]------[z]-''30(''-''))'
    print'(4x''c.o.m.'',3x,3(x,f8.3))',com
-   print'(''------------------------------------------'')'
+   print'(72(''-''))'
 
 end subroutine prinput
 
@@ -110,10 +115,10 @@ subroutine prchrg(nat,at,z,acc)
 
    if (minval(at).lt.1) &
    &  call raise('W','Charges make no sense when ghost atoms are present')
-   print'(''----[#]-----[Z]-----------------------[q]-'')'
+   print'(''----[#]-----[Z]-----------------------[q]-''30(''-''))'
    print'(x,i5,3x,i5,x,a2,3x,f20.'//acc//')', &
    &  (i,at(i),capitalize(esym(at(i))),z(i),i=1,nat)
-   print'(''------------------------------------------'')'
+   print'(72(''-''))'
    
 end subroutine prchrg
 
@@ -225,13 +230,134 @@ elemental function esym(i) result(sym)
    endif
 end function esym
 
-subroutine prmat(mat,d1,d2,name,inunit,instep)
+subroutine prgemat_e(mat,d1,d2,name,inunit,instep)
    use iso_fortran_env, only : output_unit
    use precision, only : wp => dp
    implicit none
    integer, intent(in) :: d1
-   integer, intent(in),optional :: d2
-   real(wp),intent(in) :: mat(*)
+   integer, intent(in) :: d2
+   real(wp),intent(in) :: mat(d1,d2)
+   character(len=*),intent(in),optional :: name
+   integer, intent(in),optional :: inunit
+   integer, intent(in),optional :: instep
+   integer :: i,j,k,l,step,unit
+   if (present(inunit)) then
+      unit = inunit
+   else
+      unit = output_unit
+   endif
+   if (present(instep)) then
+      step = instep
+   else
+      step = 4
+   endif
+   if(present(name)) write(unit,'(/,''matrix printed:'',x,a)') name
+   do i = 1, d2, step
+      l = min(i+step-1,d2)
+      write(unit,'(/,6x)',advance='no')
+      do k = i, l
+      write(unit,'(6x,i7,3x)',advance='no') k
+      enddo
+      write(unit,'(a)')
+      do j = 1, d1
+         write(unit,'(i6)',advance='no') j
+         do k = i, l
+         write(unit,'(x,e15.8)',advance='no') mat(j,k)
+         enddo
+         write(unit,'(a)')
+      enddo
+   enddo
+   return
+end subroutine prgemat_e
+
+subroutine prsymat_e(mat,d1,name,inunit,instep)
+   use iso_fortran_env, only : output_unit
+   use precision, only : wp => dp
+   use misc,      only : idx
+   implicit none
+   integer, intent(in) :: d1
+   real(wp),intent(in) :: mat(d1*(d1+1))
+   character(len=*),intent(in),optional :: name
+   integer, intent(in),optional :: inunit
+   integer, intent(in),optional :: instep
+   integer :: i,j,k,l,step,unit
+   if (present(inunit)) then
+      unit = inunit
+   else
+      unit = output_unit
+   endif
+   if (present(instep)) then
+      step = instep
+   else
+      step = 4
+   endif
+   if(present(name)) write(unit,'(/,''matrix printed:'',x,a)') name
+   do i = 1, d1, step
+      l = min(i+step-1,d1)
+      write(unit,'(/,6x)',advance='no')
+      do k = i, l
+      write(unit,'(6x,i7,3x)',advance='no') k
+      enddo
+      write(unit,'(a)')
+      do j = i, d1
+         l = min(i+(step-1),j)
+         write(unit,'(i6)',advance='no') j
+         do k = i, l
+         write(unit,'(x,e15.8)',advance='no') mat(idx(j,k))
+         enddo
+         write(unit,'(a)')
+      enddo
+   enddo
+   return
+end subroutine prsymat_e
+
+subroutine prgemat_f(mat,d1,d2,name,inunit,instep)
+   use iso_fortran_env, only : output_unit
+   use precision, only : wp => dp
+   implicit none
+   integer, intent(in) :: d1
+   integer, intent(in) :: d2
+   real(wp),intent(in) :: mat(d1,d2)
+   character(len=*),intent(in),optional :: name
+   integer, intent(in),optional :: inunit
+   integer, intent(in),optional :: instep
+   integer :: i,j,k,l,step,unit
+   if (present(inunit)) then
+      unit = inunit
+   else
+      unit = output_unit
+   endif
+   if (present(instep)) then
+      step = instep
+   else
+      step = 5
+   endif
+   if(present(name)) write(*,'(/,''matrix printed:'',x,a)') name
+   do i = 1, d2, step
+      l = min(i+step-1,d2)
+      write(unit,'(/,6x)',advance='no')
+      do k = i, l
+      write(unit,'(3x,i7,3x)',advance='no') k
+      enddo
+      write(unit,'(a)')
+      do j = 1, d1
+         write(unit,'(i6)',advance='no') j
+         do k = i, l
+         write(unit,'(x,f12.7)',advance='no') mat(j,k)
+         enddo
+         write(unit,'(a)')
+      enddo
+   enddo
+   return
+end subroutine prgemat_f
+
+subroutine prsymat_f(mat,d1,name,inunit,instep)
+   use iso_fortran_env, only : output_unit
+   use precision, only : wp => dp
+   use misc, only : idx
+   implicit none
+   integer, intent(in) :: d1
+   real(wp),intent(in) :: mat(d1*(d1+1))
    character(len=*),intent(in),optional :: name
    integer, intent(in),optional :: inunit
    integer, intent(in),optional :: instep
@@ -247,73 +373,23 @@ subroutine prmat(mat,d1,d2,name,inunit,instep)
       step = 6
    endif
    if(present(name)) write(*,'(/,''matrix printed:'',x,a)') name
-   if(present(d2)) then
-      call prgemat(mat,d1,d2,unit,step)
-   else
-      call prsymat(mat,d1,unit,step)
-   endif
+   do i = 1, d1, step
+      l = min(i+step-1,d1)
+      write(unit,'(/,6x)',advance='no')
+      do k = i, l
+      write(unit,'(3x,i7,3x)',advance='no') k
+      enddo
+      write(unit,'(a)')
+      do j = i, d1
+         l = min(i+(step-1),j)
+         write(unit,'(i6)',advance='no') j
+         do k = i, l
+         write(unit,'(x,f12.7)',advance='no') mat(idx(j,k))
+         enddo
+         write(unit,'(a)')
+      enddo
+   enddo
    return
-end subroutine prmat
-
-   subroutine prgemat(mat,d1,d2,unit,step)
-      use precision, only : wp => dp
-      real(wp),intent(in) :: mat(*)
-      integer, intent(in) :: d1
-      integer, intent(in) :: d2
-      integer, intent(in) :: unit
-      integer, intent(in) :: step
-      do i = 1, d2, step
-         l = min(i+step-1,d2)
-         write(unit,'(/,6x)',advance='no')
-         do k = 1, l
-         write(unit,'(i7,3x)',advance='no') k
-         enddo
-         write(unit,'(a)')
-         do j = 1, d1
-            write(unit,'(i6)',advance='no') j
-            do k = i, l
-            write(unit,'(x,f9.5)',advance='no') mat(id(j,k))
-            enddo
-            write(unit,'(a)')
-         enddo
-      enddo
-   end subroutine prgemat
-   subroutine prsymat(mat,d1,unit,step)
-      use precision, only : wp => dp
-      real(wp),intent(in) :: mat(*)
-      integer, intent(in) :: d1
-      integer, intent(in) :: unit
-      integer, intent(in) :: step
-      do i = 1, d1, step
-         l = min(i+step-1,d1)
-         write(unit,'(/,6x)',advance='no')
-         do k = 1, l
-         write(unit,'(i7,3x)',advance='no') k
-         enddo
-         write(unit,'(a)')
-         do j = i, d1
-            l = min(i+(step-1),j)
-            write(unit,'(i6)',advance='no') j
-            do k = i, l
-            write(unit,'(x,f9.5)',advance='no') mat(ic(j,k))
-            enddo
-            write(unit,'(a)')
-         enddo
-      enddo
-   end subroutine prsymat
-   elemental function ic(i,j)
-      integer,intent(in) :: i,j
-      integer :: ic
-      if (i.ge.j) then
-         ic = i*(i-1)/2+j
-      else
-         ic = j*(j-1)/2+i
-      endif
-   end function ic
-   elemental function id(i,j)
-      integer,intent(in) :: i,j
-      integer :: id
-      id = i+(j-1)*d1
-   end function id
+end subroutine prsymat_f
 
 end module printout

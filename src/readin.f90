@@ -116,6 +116,7 @@ subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
 end subroutine rdargv
 
 subroutine rdinput(fname,nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C)
+   use iso_fortran_env, only : input_unit
    use precision, only : wp => dp
    implicit none
 !* INPUT
@@ -142,13 +143,15 @@ subroutine rdinput(fname,nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C)
 
 !* rdargv should have catched this errors already, but to be sure
 !  we check again, if an input file is provided and if it exist
-   if (.not.allocated(fname)) call raise('E','No input file given')
-   inquire(file=fname,exist=exist)
-   if (.not.exist) call raise('E','File: '//fname//' not found')
+   if (.not.allocated(fname)) then
+      call raise('W','No input file given, reading STDIN')
+      id = input_unit
+   else
+      inquire(file=fname,exist=exist)
+      if (.not.exist) call raise('E','File: '//fname//' not found')
+      open(id,file=fname,status='old')
+   endif
   
-!* Open the inputfile and extract all necessary informations from
-!  the header
-   open(id,file=fname,status='old')
    read(id,*,iostat=err) nat,nel,nbf
    if (err.ne.0) call raise('E','Error while reading input file')
    if (nat.lt.1) call raise('E','No atoms')

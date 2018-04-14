@@ -20,7 +20,7 @@ pure subroutine diis_fock(nbf,iter,maxdiis,F,F_save,c)
 
 end subroutine diis_fock
 
-pure subroutine build_diis(nbf,iter,maxdiis,S,F,P,F_save,emat,c,dodiis)
+pure subroutine build_diis(nbf,iter,maxdiis,S,F,P,F_save,emat,emax,c,dodiis)
    use precision, only : wp => dp
    use lapack95, only : gesv
    use blas95,   only : gemm
@@ -30,6 +30,7 @@ pure subroutine build_diis(nbf,iter,maxdiis,S,F,P,F_save,emat,c,dodiis)
    real(wp),intent(in)    :: S(nbf,nbf),F(nbf,nbf),P(nbf,nbf)
    real(wp),intent(inout) :: F_save(nbf,nbf,maxdiis)
    real(wp),intent(inout) :: emat(nbf,nbf,maxdiis)
+   real(wp),intent(out)   :: emax
    real(wp),intent(out)   :: c(maxdiis+1)
    logical, intent(out)   :: dodiis
 
@@ -50,6 +51,7 @@ pure subroutine build_diis(nbf,iter,maxdiis,S,F,P,F_save,emat,c,dodiis)
    call gemm(S,tmp1,emat(:,:,k))
    call gemm(F,P,tmp1)
    call gemm(tmp1,S,emat(:,:,k),beta=-1.0_wp)
+   emax = maxval(emat(:,:,k))
 
    do i = max(1,iter-maxdiis), iter; ii = mod(i-1,maxdiis)+1
       do j = max(1,iter-maxdiis), i; jj = mod(j-1,maxdiis)+1

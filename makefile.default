@@ -292,6 +292,8 @@ $(PROGNAME): $(LIBNAME) $(OBJSP)
 %.o : %.mod
 %.f : %.F
 
+%.mod: %.o
+
 # now the rules to actually build the object files
 $(OUTDIR)/%.o: %.f $(MAKEDEP)
 	@echo "making $@ from $<" && \

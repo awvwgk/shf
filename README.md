@@ -32,7 +32,7 @@ number of iterations, an error is thrown.
 $ s-hf lih.in --iter 151
 ```
 
-Does a simple steepest decent geometry optimisation:
+Does a simple steepest decent geometry optimization:
 
 ```
 $ s-hf hhe.in -o
@@ -47,8 +47,9 @@ $ s-hf be.in --diis
 $ s-hf lih.in --diis 10
 ```
 
-Enforces an unrestricted Hartree-Fock. At the moment you cannot break the
-symmetry in na-nb = 0 cases, so you will get the result of the restricted HF-SCF
+Enforces an unrestricted Hartree-Fock. At the moment the symmetry is broken
+by using a hcore guess for alpha MOs and a really bad orthonormalizer guess
+for beta MOs
 
 ```
 $ s-hf li.in --uhf 1
@@ -56,7 +57,7 @@ $ s-hf h2.in --uhf 2
 ```
 
 Does a second order Møller-Plesset many-body pertubation theory calculation,
-employing a N5 integral transformation.
+employing a O(N5) integral transformation.
 
 ```
 $ s-hf be.in --mp2
@@ -73,3 +74,8 @@ and of course:
 
 A. Szabo, N. Ostlund, Modern Quantum Chemistry: Introduction to
 Advanced Electronic Structure Theory, Dover Publications, 1989.
+
+more recently I also implemented integrals drawn from this well known work:
+
+T. Helgaker, P. Jørgensen, J. Olsen, Molecular Electronic-Structure
+Theory, WILEY, 2000.

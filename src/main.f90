@@ -13,19 +13,22 @@
 !!    GNU General Public License for more details.
 !!================================================================= 1803
 program shf
-
    use precision, only : wp => dp
+
 !* input/output modules
    use readin
    use printout
    use timings
+
 !* quantum mechanical calculations
    use ints
    use guess
    use scf
    use mbpt
+
 !* some analysis
    use pop
+
 !* optimisiation stuff
    use opt
 
@@ -88,14 +91,15 @@ program shf
 
 !* print some fancy banner
    call banner
+   call prdate('S')
 
 !$omp parallel private(tid)
       tid = omp_get_thread_num()
       if (tid.eq.0) then
          nproc = omp_get_num_threads()
-         !print'(''------------------------------------------'')'
+         !print'(72(''-''))'
          print'('' # OMP threads:'',i25)',nproc
-         !print'(''------------------------------------------'')'
+         !print'(72(''-''))'
       end if
 !$omp end parallel 
 
@@ -151,7 +155,9 @@ program shf
    allocate( S(nbf,nbf),V(nbf,nbf),T(nbf,nbf), &
    &         eri(nbf*(nbf+1)/2*(nbf*(nbf+1)/2+1)/2), &
    &         source = 0.0_wp )
+   call start_timing(2)
    call integrals(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T,eri)
+   call stop_timing(2)
 !* debug
 !  call prmat(S,nbf,nbf,name='S')
 !  call prmat(V,nbf,nbf,name='V')
@@ -175,14 +181,25 @@ program shf
 
 !* initial guess density (currently hcore guess)
 !  if (first) then ! currently no restart possible for uhf case
-      print'('' * doing hcore guess'')'
+      if (nalp.eq.nbet) then
+         print'('' * doing hcore guess for alpha MOs'')'
+      else
+         print'('' * doing hcore guess'')'
+      endif
       call hcore_guess(nbf,nalp,H,X,Fa,Ca)
-      call hcore_guess(nbf,nbet,H,X,Fb,Cb)
+      if (nalp.eq.nbet) then
+         print'('' * doing really bad orthormalizer guess for beta MOs'')'
+         Cb = X ! use really bad orthonormalizer guess to break symmetry
+      else
+         call hcore_guess(nbf,nbet,H,X,Fb,Cb)
+      endif
 !  endif
 
+   call start_timing(3)
    call hf(nat,nbf,nalp,nbet,at,xyz,ethr,pthr,first, &
         &  chacc,maxiter,diis,maxdiis,startdiis, &
         &  S,V,T,X,Pa,Pb,H,Fa,Fb,Ca,Cb,eri,epsa,epsb,e)
+   call stop_timing(3)
    call prenergy(nat,nbf,nalp,nbet,at,xyz,chacc, &
         &        S,V,T,eri,H,Fa,Fb,Pa,Pb,Ca,Cb,epsa,epsb)
 
@@ -229,12 +246,16 @@ program shf
       call hcore_guess(nbf,nocc,H,X,F,C)
    endif
 
-
+   call start_timing(3)
    call hf(nat,nbf,nocc,at,xyz,ethr,pthr,first, &
         &  chacc,maxiter,diis,maxdiis,startdiis, &
         &  S,V,T,X,P,H,F,C,eri,eps,e)
+   call stop_timing(3)
    call prenergy(nat,nbf,nocc,nocc,at,xyz,chacc, &
         &        S,V,T,eri,H,F,F,P,P,C,C,eps,eps)
+   call onetrafo(nbf,F,C)
+   call prmat(F,nbf,nbf,'Final Fock matrix')
+   print'(a)'
    print'('' * dumping restart file'')'
    call prrestart('restart',nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C,chacc)
 
@@ -294,9 +315,9 @@ program shf
    print'(a)'
 
 !* done, print some result
-   print'(''=========================================='')'
-   print'('' TOTAL ENERGY'',f27.'//chacc//')',e
-   print'(''=========================================='')'
+   print'(72(''=''))'
+   print'('' TOTAL ENERGY'',f57.'//chacc//')',e
+   print'(72(''=''))'
 
 !* give some statistics on timings and stuff
    print'(a)'
@@ -304,6 +325,8 @@ program shf
    call stop_timing(1)
    call prdate('E')
    call prtiming(1)
+!  call prtiming(2,'int')
+!  call prtiming(3,'scf')
    print'(a)'
 
    call terminate(0)

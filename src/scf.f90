@@ -2,12 +2,12 @@ module scf
 
 !* use this nice overloading feature of FORTRAN to
 !  combine all SCF variants in one name
-interface hf
+   interface hf
    module procedure rhf_conventional
    module procedure uhf_conventional
 !  module procedure rhf_direct
 !  module procedure uhf_direct
-end interface hf
+   end interface hf
 
 contains
 
@@ -40,8 +40,8 @@ pure subroutine build_orthonormalizer(nbf,S,X,err)
    implicit none
    integer, intent(in)  :: nbf
    real(wp),intent(in)  :: S(nbf,nbf)
-   integer, intent(out) :: err
    real(wp),intent(out) :: X(nbf,nbf)
+   integer, intent(out) :: err
 
    real(wp) :: d(nbf),tmp1(nbf,nbf),tmp2(nbf,nbf)
    logical  :: pidx(nbf,nbf)
@@ -67,7 +67,9 @@ pure function escf(H,F,P,nbf) result(e)
    use blas95,    only : gemm
    implicit none
    integer, intent(in) :: nbf
-   real(wp),intent(in) :: H(nbf,nbf),F(nbf,nbf),P(nbf,nbf)
+   real(wp),intent(in) :: H(nbf,nbf)
+   real(wp),intent(in) :: F(nbf,nbf)
+   real(wp),intent(in) :: P(nbf,nbf)
 
    real(wp) :: e,tmp(nbf,nbf)
    integer  :: i,j
@@ -82,11 +84,12 @@ pure subroutine build_fock(nbf,H,F,P,eri)
    use misc,      only : idx
    implicit none
    integer, intent(in)  :: nbf
-   real(wp),intent(in)  :: H(nbf,nbf),P(nbf,nbf)
+   real(wp),intent(in)  :: H(nbf,nbf)
+   real(wp),intent(in)  :: P(nbf,nbf)
    real(wp),intent(in)  :: eri((nbf*(nbf+1)/2)*(nbf*(nbf+1)/2+1)/2)
    real(wp),intent(out) :: F(nbf,nbf)
 
-   integer :: i,j,k,l,ij,kl,ijkl,ik,jl,ikjl
+   integer  :: i,j,k,l,ij,kl,ijkl,ik,jl,ikjl
 
    F = H
    do i = 1, nbf
@@ -124,12 +127,14 @@ end subroutine build_density
 
 pure subroutine roothaan_hall(nbf,X,F,C,eps,err)
    use precision, only : wp => dp
-   use lapack95, only : syev
-   use blas95,   only : gemm
+   use lapack95,  only : syev
+   use blas95,    only : gemm
    implicit none
    integer, intent(in)  :: nbf
-   real(wp),intent(in)  :: F(nbf,nbf),X(nbf,nbf)
-   real(wp),intent(out) :: C(nbf,nbf),eps(nbf)
+   real(wp),intent(in)  :: F(nbf,nbf)
+   real(wp),intent(in)  :: X(nbf,nbf)
+   real(wp),intent(out) :: C(nbf,nbf)
+   real(wp),intent(out) :: eps(nbf)
    integer, intent(out) :: err
 
    real(wp) :: w(4*nbf),tmp(nbf,nbf)
@@ -148,6 +153,7 @@ subroutine rhf_conventional &
            &  (nat,nbf,nocc,at,xyz,ethr,pthr,first, &
            &   acc,maxiter,ldiis,maxdiis,startdiis, &
            &   S,V,T,X,P,H,F,C,eri,eps,e)
+   use iso_fortran_env, only : id => output_unit
    use precision, only : wp => dp
    use diis,      only : build_diis,diis_fock
    implicit none
@@ -182,11 +188,12 @@ subroutine rhf_conventional &
    real(wp),allocatable :: P_save(:,:)
 
 !* DIIS
+   real(wp) :: emax
    real(wp),allocatable :: emat(:,:,:),F_save(:,:,:),cdiis(:),SS(:,:)
 
-   print'(a)'
-   print'(''------------------------------------------'')'
-   print'('' Restricted Hartree-Fock SCF calculation'')'
+   write(id,'(a)')
+   write(id,'(72(''-''))')
+   write(id,'('' Restricted Hartree-Fock SCF calculation'')')
 
    allocate( P_save(nbf,nbf), source=0.0_wp )
 
@@ -205,24 +212,33 @@ subroutine rhf_conventional &
 
    eold = enuc+escf(H,F,P,nbf)
    iter = 0
-   print'(''-[ITER]---------[E(SCF)]--------[ΔE(SCF)]-'')'
-   print'(x,i5,x,f16.'//acc//')',iter,eold
+
+   write(id,'(1(''-'')''[ITER]'')',   advance='no')
+   write(id,'(9(''-'')''[E(SCF)]'')', advance='no')
+   write(id,'(8(''-'')''[ΔE(SCF)]'')',advance='no')
+   write(id,'(7(''-'')''[RMS(P)]'')', advance='no')
+   if (ldiis) then
+      write(id,'(5(''-'')''[max[F,P]]'')',advance='no')
+      write(id,'(1(''-''))')
+   else
+      write(id,'(15(''-''))')
+   endif
+   write(id,'(x,i5,x,f16.'//acc//')'),iter,eold
+
    scf: do
       iter = iter+1
       if (iter.gt.maxiter) call raise('E','SCF did not converge')
       call build_fock(nbf,H,F,P,eri)
 
       if (ldiis) then !* DIIS
-      call build_diis(nbf,iter,maxdiis,S,F,P,F_save,emat,cdiis,ldiis)
+      call build_diis(nbf,iter,maxdiis,S,F,P,F_save,emat,emax,cdiis,ldiis)
       if (ldiis) then
-      if (iter.gt.startdiis) then !* start DIIS
-         call diis_fock(nbf,iter,maxdiis,F,F_save,cdiis)
-      elseif (iter.eq.startdiis) then
-         print'('' * starting DIIS'')'
+      if (iter.ge.startdiis) then !* start DIIS
+         if (iter.eq.startdiis) write(id,'('' * starting DIIS'')')
          call diis_fock(nbf,iter,maxdiis,F,F_save,cdiis)
       endif !* start DIIS
       else
-         print'('' * shutting down DIIS'')'
+         write(id,'('' * shutting down DIIS'')')
          deallocate( F_save,emat,cdiis )
       endif
       endif !* DIIS
@@ -233,15 +249,20 @@ subroutine rhf_conventional &
       call build_density(nbf,nocc,P,C)
       e = enuc+escf(H,F,P,nbf)
       rmsd = sqrt( sum( (P-P_save)**2 ) )
-      print'(x,i5,x,f16.'//acc//',x,f16.'//acc//')',iter,e,e-eold
+      write(id,'(x,i5)',advance='no') iter
+      write(id,'(x,f16.'//acc//')',advance='no') e
+      write(id,'(x,f16.'//acc//')',advance='no') e-eold
+      write(id,'(x,f14.'//acc//')',advance='no') rmsd
+      if (ldiis) write(id,'(x,f14.'//acc//')',advance='no') emax
+      write(id,'(a)')
       if((abs(e-eold).lt.ethr).and.rmsd.lt.pthr) exit scf
       eold = e
    enddo scf
    first=.false.
 
-   print'(''------------------------------------------'')'
-   print'('' FINAL SCF ENERGY'',f23.'//acc//')',e
-   print'(''------------------------------------------'')'
+   write(id,'(72(''-''))')
+   write(id,'('' FINAL SCF ENERGY'',f53.'//acc//')') e
+   write(id,'(72(''-''))')
 
 end subroutine rhf_conventional
 
@@ -249,6 +270,7 @@ subroutine uhf_conventional &
            &  (nat,nbf,nalp,nbet,at,xyz,ethr,pthr,first, &
            &   acc,maxiter,ldiis,maxdiis,startdiis, &
            &   S,V,T,X,Pa,Pb,H,Fa,Fb,Ca,Cb,eri,epsa,epsb,e)
+   use iso_fortran_env, only : id => output_unit
    use precision, only : wp => dp
    use diis,      only : build_diis,diis_fock
    implicit none
@@ -288,13 +310,14 @@ subroutine uhf_conventional &
    logical  :: uidx(nbf,nbf),lidx(nbf,nbf)
 
 !* DIIS
-   logical :: diisa,diisb
+   logical  :: diisa,diisb
+   real(wp) :: eamax,ebmax
    real(wp),allocatable :: eamat(:,:,:),Fa_save(:,:,:),cdiisa(:)
    real(wp),allocatable :: ebmat(:,:,:),Fb_save(:,:,:),cdiisb(:)
 
-   print'(a)'
-   print'(''------------------------------------------'')'
-   print'('' Unrestricted HF-SCF calculation'')'
+   write(id,'(a)')
+   write(id,'(72(''-''))')
+   write(id,'('' Unrestricted HF-SCF calculation'')')
 
    allocate( Pa_save(nbf,nbf),Pb_save(nbf,nbf), source=0.0_wp )
 
@@ -311,28 +334,38 @@ subroutine uhf_conventional &
 
    eold = enuc+uescf(H,Fa,Fb,Pa,Pb,nbf)
    iter = 0
-   print'(''-[ITER]---------[E(SCF)]--------[ΔE(SCF)]-'')'
-   print'(x,i5,x,f16.'//acc//')',iter,eold
+
+   write(id,'(1(''-'')''[ITER]'')',   advance='no')
+   write(id,'(9(''-'')''[E(SCF)]'')', advance='no')
+   write(id,'(8(''-'')''[ΔE(SCF)]'')',advance='no')
+   write(id,'(7(''-'')''[RMS(P)]'')', advance='no')
+   if (ldiis) then
+      write(id,'(5(''-'')''[max[F,P]]'')',advance='no')
+      write(id,'(1(''-''))')
+   else
+      write(id,'(15(''-''))')
+   endif
+   write(id,'(x,i5,x,f16.'//acc//')') iter,eold
+
    scf: do
       iter = iter+1
       if (iter.gt.maxiter) call raise('E','SCF did not converge')
       call build_ufock(nbf,H,Fa,Fb,Pa,Pb,eri)
       
       if (ldiis) then !* DIIS
-      call build_diis(nbf,iter,maxdiis,S,Fa,Pa,Fa_save,eamat,cdiisa,diisa)
-      call build_diis(nbf,iter,maxdiis,S,Fb,Pb,Fb_save,ebmat,cdiisb,diisb)
+      call build_diis(nbf,iter,maxdiis,S,Fa,Pa,Fa_save,  &
+           &          eamat,eamax,cdiisa,diisa)
+      call build_diis(nbf,iter,maxdiis,S,Fb,Pb,Fb_save,  &
+           &          ebmat,ebmax,cdiisb,diisb)
       ldiis = diisa.or.diisb
       if (ldiis) then
-      if (iter.gt.startdiis) then !* start DIIS
-         call diis_fock(nbf,iter,maxdiis,Fa,Fa_save,cdiisa)
-         call diis_fock(nbf,iter,maxdiis,Fb,Fb_save,cdiisb)
-      elseif (iter.eq.startdiis) then
-         print'('' * starting DIIS'')'
+      if (iter.ge.startdiis) then !* start DIIS
+         if (iter.eq.startdiis) write(id,'('' * starting DIIS'')')
          call diis_fock(nbf,iter,maxdiis,Fa,Fa_save,cdiisa)
          call diis_fock(nbf,iter,maxdiis,Fb,Fb_save,cdiisb)
       endif !* start DIIS
       else
-         print'('' * shutting down DIIS'')'
+         write(id,'('' * shutting down DIIS'')')
          deallocate( Fa_save,Fb_save,eamat,ebmat,cdiisa,cdiisb )
       endif
       endif !* DIIS
@@ -347,14 +380,22 @@ subroutine uhf_conventional &
       call build_density(nbf,nbet,Pb,Cb)
       e = enuc+uescf(H,Fa,Fb,Pa,Pb,nbf)
       rmsd = sqrt(sum((Pa-Pa_save)**2)) + sqrt(sum((Pb-Pb_save)**2))
-      print'(x,i5,x,f16.'//acc//',x,f16.'//acc//')',iter,e,e-eold
+
+      write(id,'(x,i5)',advance='no') iter
+      write(id,'(x,f16.'//acc//')',advance='no') e
+      write(id,'(x,f16.'//acc//')',advance='no') e-eold
+      write(id,'(x,f14.'//acc//')',advance='no') rmsd
+      if (ldiis) write(id,'(x,f14.'//acc//')',advance='no') max(eamax,ebmax)
+      write(id,'(a)')
+
       if((abs(e-eold).lt.ethr).and.rmsd.lt.pthr) exit scf
       eold = e
    enddo scf
    first=.false.
-   print'(''------------------------------------------'')'
-   print'('' FINAL SCF ENERGY'',f23.'//acc//')',e
-   print'(''------------------------------------------'')'
+
+   write(id,'(72(''-''))')
+   write(id,'('' FINAL SCF ENERGY'',f53.'//acc//')') e
+   write(id,'(72(''-''))')
 
 end subroutine uhf_conventional
 
@@ -364,8 +405,11 @@ pure function uescf(H,Fa,Fb,Pa,Pb,nbf) result(e)
    use blas95,    only : gemm
    implicit none
    integer, intent(in) :: nbf
-   real(wp),intent(in) :: H(nbf,nbf),Fa(nbf,nbf),Fb(nbf,nbf)
-   real(wp),intent(in) :: Pa(nbf,nbf),Pb(nbf,nbf)
+   real(wp),intent(in) :: H(nbf,nbf)
+   real(wp),intent(in) :: Fa(nbf,nbf)
+   real(wp),intent(in) :: Fb(nbf,nbf)
+   real(wp),intent(in) :: Pa(nbf,nbf)
+   real(wp),intent(in) :: Pb(nbf,nbf)
 
    real(wp) :: e,tmp(nbf,nbf)
    integer  :: i,j
@@ -383,8 +427,10 @@ pure subroutine build_ufock(nbf,H,Fa,Fb,Pa,Pb,eri)
    integer, intent(in)  :: nbf
    real(wp),intent(in)  :: H(nbf,nbf)
    real(wp),intent(in)  :: eri((nbf*(nbf+1)/2)*(nbf*(nbf+1)/2+1)/2)
-   real(wp),intent(in)  :: Pa(nbf,nbf),Pb(nbf,nbf)
-   real(wp),intent(out) :: Fa(nbf,nbf),Fb(nbf,nbf)
+   real(wp),intent(in)  :: Pa(nbf,nbf)
+   real(wp),intent(in)  :: Pb(nbf,nbf)
+   real(wp),intent(out) :: Fa(nbf,nbf)
+   real(wp),intent(out) :: Fb(nbf,nbf)
 
    integer  :: i,j,k,l,ij,kl,ijkl,ik,jl,ikjl
    real(wp) :: Pkl
