@@ -52,7 +52,7 @@ module ints
 
 !* Boys function is precalculated on a grid as described in Helgaker2000
 !  (see tools/boys.rb to generate anew).
-   include 'boysf_grid.inc'
+   include 'boysf_grid.f90'
 
 !* possible moments up to g functions (more then I can ever effort):
 !> s    px   py   pz    dx²   dy²   dz²   dxy   dxz   dyz

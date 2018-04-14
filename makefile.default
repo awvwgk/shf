@@ -85,7 +85,7 @@ OBJS3 := precision.o\
          atomdata.o
 
 # put all include files here (currently not used)
-INC := boysf_grid.inc
+INC := boysf_grid.f90
 
 # libraries, do not put the program name itself here
 LIBS := mkl_blas95_lp64\
