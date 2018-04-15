@@ -136,22 +136,27 @@ subroutine rdinput(fname,nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C)
    character(len=72) :: line
    character(len=2)  :: chdum
    integer  :: i,j,k,ibf,iz,err,id,ii,idum
+   logical  :: stdin
    logical  :: exist
    real(wp) :: x,y,z,dum
 
    id = 42
+   stdin = .false.
 
-!* rdargv should have catched this errors already, but to be sure
-!  we check again, if an input file is provided and if it exist
    if (.not.allocated(fname)) then
+!* in case you really want to you can provide everything by hand
       call raise('W','No input file given, reading STDIN')
+      stdin = .true.
       id = input_unit
    else
+!* rdargv should have catched this errors already, but to be sure
+!  we check again, if an input file is provided and if it exist
       inquire(file=fname,exist=exist)
       if (.not.exist) call raise('E','File: '//fname//' not found')
       open(id,file=fname,status='old')
    endif
   
+   if (stdin) print'(''<nat> <nel> <nbf>'',/,''> '',$)'
    read(id,*,iostat=err) nat,nel,nbf
    if (err.ne.0) call raise('E','Error while reading input file')
    if (nat.lt.1) call raise('E','No atoms')
@@ -168,6 +173,7 @@ subroutine rdinput(fname,nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C)
 !  the right value
    k=0
    do i = 1, nat !* loop over all atoms
+      if (stdin) print'(''<x> <y> <z> <iat> <ibf>'',/,i0'' > '',$)',i
       read(id,*,iostat=err) x,y,z,iz,ibf
       if(err.ne.0) call raise('E','Error while reading input file')
       !* and save them into the array
@@ -177,6 +183,7 @@ subroutine rdinput(fname,nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C)
       !* now check for the exponents
       if((k+ibf).gt.nbf) call raise('E','to many exponents')
       do j = 1, ibf
+         if (stdin) print'(''<zeta> [<ityp> <ng>]'',/,i0,x,i0,'' > '',$)',i,j
          read(id,'(a)',iostat=err) line
          if(err.ne.0) call raise('E','Error while reading exponents')
          read(line,*,iostat=err) dum,chdum,idum
@@ -221,19 +228,25 @@ subroutine rdinput(fname,nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C)
    if(k.ne.nbf) call raise('E','number of basis function mismatch')
 
 !* restart section
+   if (stdin) print'(''write <restart> to provide start orbitals'',/,''> '',$)'
    read(id,'(a)',iostat=err) line
    if (err.eq.0) then
       if (index(line,'restart').ne.0) then
          allocate( C(nbf,nbf), source = 0.0_wp )
-         do i = 1, nbf
+         i = 0
+         do
+            i = i + 1
+            if (i.gt.nbf) exit
+            if (stdin) print'(''which MO?'',x,i0,x,''left'',/,''> '',$)', nbf-i+1
             read(id,*,iostat=err) ii
             if (err.ne.0) then
                call raise('W','could not read restart')
                deallocate(C)
                exit
             endif
-            if(i.eq.ii) then
-               read(id,*,iostat=err) (C(j,i),j=1,nbf)
+            if ((ii.gt.0).and.(ii.le.nbf)) then
+               if (stdin) print'(''please provide coeffients'',/,i0,x''> '',$)', ii
+               read(id,*,iostat=err) (C(j,ii),j=1,nbf)
                if (err.ne.0) then
                   call raise('W','could not read restart')
                   deallocate(C)
@@ -242,6 +255,7 @@ subroutine rdinput(fname,nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C)
             endif
          enddo
       endif
+      if (stdin) print'(''Thank you for your patience'')'
    endif
    close(id)
 

@@ -65,7 +65,7 @@ subroutine prinput(fname,nat,nel,nocc,nalp,nbet,nbf,at,xyz,zeta,aoc,ng,brsym)
    use strings, only : capitalize
    !use geom, only : comshift
    implicit none
-   character(len=*),intent(in) :: fname
+   character(len=:),allocatable,intent(in) :: fname
    integer, intent(in)    :: nat,nel,nbf
    integer, intent(in)    :: nalp,nbet,nocc
    logical, intent(in)    :: brsym
@@ -79,7 +79,11 @@ subroutine prinput(fname,nat,nel,nocc,nalp,nbet,nbf,at,xyz,zeta,aoc,ng,brsym)
    integer :: i
 
    print'(72(''-''))'
+   if (.not.allocated(fname)) then
+   print'('' Geometry read from STDIN'')'
+   else
    print'('' Geometry read from'',x,a)',fname
+   endif
    print'(72(''-''))'
    print'('' Number of atoms     :'',i18)',nat
    print'('' Number of electrons :'',i18)',nel

@@ -70,5 +70,10 @@ subroutine credits
    &     'x,''Dover Publications, 1989.'')'
 
    print'(72(''-''))'
+   print'(x,''integrals are drawn from this well known work:'','// &
+   &   '/,x,''T. Helgaker, P. Jørgensen, J. Olsen, Molecular'','// &
+   &     'x,''Electronic-Structure'','// &
+   &   '/,x,''Theory, WILEY, 2000.'')'
+   print'(72(''-''))'
 
 end subroutine credits
