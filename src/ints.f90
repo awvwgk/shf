@@ -195,9 +195,12 @@ subroutine intdriver_all(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T,eri)
    real(wp),allocatable :: qcs(:,:)
 
    allocate( qcs(nbf,nbf), source = 0.0_wp )
+
    call intdriver_one(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T)
+
    call intdriver_qcs(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs)
    call intdriver_tei(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs,eri)
+
    deallocate(qcs)
 
 end subroutine intdriver_all
@@ -556,6 +559,7 @@ pure subroutine twoint(npa,npb,npc,npd,r_a,r_b,r_c,r_d, &
                ocd = 1.0_wp/ecd
                est = gam(k)*del(l)*rcd*ocd
                if (est.gt.i_thr) cycle
+               cd = exp(-est)
 
 !              new gaussian at r_q
                r_q = (gam(k)*r_c+del(l)*r_d)*ocd
