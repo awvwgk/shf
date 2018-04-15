@@ -26,7 +26,7 @@ module ints
    integer, parameter :: m_max = 28 ! max iter in boys function
 
    real(wp),parameter :: tth = 2.0_wp/3.0_wp
-   real(wp),parameter :: pi = 3.1415926535897932384626433832795029d0
+   real(wp),parameter :: pi = 3.1415926535897932384626433832795029_wp
    real(wp),parameter :: tpi = 2.0_wp*pi
    real(wp),parameter :: twopi25 = 34.98683665524963_wp
    real(wp),parameter :: tosqpi = 2.0_wp/sqrt(pi)
@@ -84,6 +84,83 @@ module ints
    &  0,0,4,0,1,0,1,3,3,0,2,2,1,1,2/),&! g-shell
    !* now sort them in the right order
    &  shape(lmn), order=(/2,1/))
+
+!* Taken from postg by Alberto Otero de la Roza
+   real(wp),parameter :: s3 = sqrt(3._wp)
+   real(wp),parameter :: s3_4 = sqrt(3._wp/4._wp)
+   real(wp),parameter :: s3_8 = sqrt(3._wp/8._wp)
+   real(wp),parameter :: s5_8 = sqrt(5._wp/8._wp)
+   real(wp),parameter :: s5_16 = sqrt(5._wp/16._wp)
+   real(wp),parameter :: s6 = sqrt(6._wp)
+   real(wp),parameter :: s10 = sqrt(10._wp)
+   real(wp),parameter :: s10_8 = sqrt(10._wp/8._wp)
+   real(wp),parameter :: s15 = sqrt(15._wp)
+   real(wp),parameter :: s15_4 = sqrt(15._wp/4._wp)
+   real(wp),parameter :: s35_4 = sqrt(35._wp/4._wp)
+   real(wp),parameter :: s35_8 = sqrt(35._wp/8._wp)
+   real(wp),parameter :: s35_64 = sqrt(35._wp/64._wp)
+   real(wp),parameter :: s45 = sqrt(45._wp)
+   real(wp),parameter :: s45_4 = sqrt(45._wp/4._wp)
+   real(wp),parameter :: s45_8 = sqrt(45._wp/8._wp)
+   real(wp),parameter :: s315_8 = sqrt(315._wp/8._wp)
+   real(wp),parameter :: s315_16 = sqrt(315._wp/16._wp)
+   real(wp),parameter :: d32 = 3._wp/2._wp
+   real(wp),parameter :: d34 = 3._wp/4._wp
+   real(wp),parameter :: d38 = 3._wp/8._wp
+
+!* dtrafo from cartesian to solid harmonics (l = 2)
+!  spherical molden order: m = 0, 1, -1, 2, -2
+!  Cartesian molden order: xx, yy, zz, xy, xz, yz
+   real(wp),parameter :: dtrafo(5,6) = reshape((/  &
+!    0      1     -1      2     -2
+   -.5_wp, 0._wp, 0._wp,  s3_4, 0._wp,& ! xx
+   -.5_wp, 0._wp, 0._wp, -s3_4, 0._wp,& ! yy
+    1._wp, 0._wp, 0._wp, 0._wp, 0._wp,& ! zz
+    0._wp, 0._wp, 0._wp, 0._wp,    s3,& ! xy
+    0._wp,    s3, 0._wp, 0._wp, 0._wp,& ! xz
+    0._wp, 0._wp,    s3, 0._wp, 0._wp & ! yz
+   /),shape(dtrafo))
+
+!* ftrafo from cartesian to solid harmonics (l = 3)
+!  spherical molden order: m = 0, 1, -1, 2, -2, 3, -3
+!  Cartesian molden order: xxx, yyy, zzz, xyy, xxy, xxz, xzz, yzz, yyz, xyz
+   real(wp),parameter :: ftrafo(7,10) = reshape((/  &
+!    0        1       -1         2       -2         3       -3 
+   0._wp,   -s3_8,   0._wp,    0._wp,   0._wp,     s5_8,   0._wp,& ! xxx 
+   0._wp,   0._wp,   -s3_8,    0._wp,   0._wp,    0._wp,   -s5_8,& ! yyy 
+   1._wp,   0._wp,   0._wp,    0._wp,   0._wp,    0._wp,   0._wp,& ! zzz 
+   0._wp,   -s3_8,   0._wp,    0._wp,   0._wp,   -s45_8,   0._wp,& ! xyy 
+   0._wp,   0._wp,   -s3_8,    0._wp,   0._wp,    0._wp,   s45_8,& ! xxy 
+    -d32,   0._wp,   0._wp,    s15_4,   0._wp,    0._wp,   0._wp,& ! xxz 
+   0._wp,      s6,   0._wp,    0._wp,   0._wp,    0._wp,   0._wp,& ! xzz 
+   0._wp,   0._wp,      s6,    0._wp,   0._wp,    0._wp,   0._wp,& ! yzz 
+    -d32,   0._wp,   0._wp,   -s15_4,   0._wp,    0._wp,   0._wp,& ! yyz 
+   0._wp,   0._wp,   0._wp,    0._wp,     s15,    0._wp,   0._wp & ! xyz 
+   /),shape(ftrafo))
+
+!* gtrafo from cartesian to solid harmonics (l = 4)
+!  spherical molden order: m = 0, 1, -1, 2, -2, 3, -3, 4, -4
+!  Cartesian molden order: xxxx yyyy zzzz xxxy xxxz xyyy yyyz xzzz 
+!                          yzzz xxyy xxzz yyzz xxyz xyyz xyzz
+   real(wp),parameter :: gtrafo(9,15) = reshape((/  &
+!    0      1     -1      2     -2       3      -3        4     -4
+     d38, 0._wp, 0._wp,-s5_16, 0._wp,  0._wp,  0._wp,  s35_64, 0._wp,& ! xxxx
+     d38, 0._wp, 0._wp, s5_16, 0._wp,  0._wp,  0._wp,  s35_64, 0._wp,& ! yyyy
+   1._wp, 0._wp, 0._wp, 0._wp, 0._wp,  0._wp,  0._wp,   0._wp, 0._wp,& ! zzzz
+   0._wp, 0._wp, 0._wp, 0._wp,-s10_8,  0._wp,  0._wp,   0._wp, s35_4,& ! xxxy
+   0._wp,-s45_8, 0._wp, 0._wp, 0._wp,  s35_8,  0._wp,   0._wp, 0._wp,& ! xxxz
+   0._wp, 0._wp, 0._wp, 0._wp,-s10_8,  0._wp,  0._wp,   0._wp,-s35_4,& ! xyyy
+   0._wp, 0._wp,-s45_8, 0._wp, 0._wp,  0._wp, -s35_8,   0._wp, 0._wp,& ! yyyz
+   0._wp,   s10, 0._wp, 0._wp, 0._wp,  0._wp,  0._wp,   0._wp, 0._wp,& ! xzzz
+   0._wp, 0._wp,   s10, 0._wp, 0._wp,  0._wp,  0._wp,   0._wp, 0._wp,& ! yzzz
+     d34, 0._wp, 0._wp, 0._wp, 0._wp,  0._wp,  0._wp,-s315_16, 0._wp,& ! xxyy
+  -3._wp, 0._wp, 0._wp, s45_4, 0._wp,  0._wp,  0._wp,   0._wp, 0._wp,& ! xxzz
+  -3._wp, 0._wp, 0._wp,-s45_4, 0._wp,  0._wp,  0._wp,   0._wp, 0._wp,& ! yyzz
+   0._wp, 0._wp,-s45_8, 0._wp, 0._wp,  0._wp, s315_8,   0._wp, 0._wp,& ! xxyz
+   0._wp,-s45_8, 0._wp, 0._wp, 0._wp,-s315_8,  0._wp,   0._wp, 0._wp,& ! xyyz
+   0._wp, 0._wp, 0._wp, 0._wp,   s45,  0._wp,  0._wp,   0._wp, 0._wp & ! xyzz
+   /),shape(gtrafo))
+
 
 contains
 
