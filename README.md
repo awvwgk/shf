@@ -1,8 +1,9 @@
 # simple Hartree–Fock
 
-A dead-simple quantum chemistry code, I spend my leisure time on (in case I have some).
-This code is not intended to do calculations on real systems, but to playing around
-with some basic concepts well known from lectures and literature.
+A dead-simple quantum chemistry code, I spend my leisure time on.
+This code is not intended to do calculations on real systems,
+but to playing around with some basic concepts well known from
+lectures and literature.
 
 ## Usage
 ```s-hf [options] <input> [options]```
@@ -25,21 +26,23 @@ $ s-hf h2.in -a 5
 $ s-hf h2.in --acc 9
 ```
 
-Set the number of iterations, if the SCF is not converged in the given
-number of iterations, an error is thrown.
+Set the number of iterations with ``--iter``, if the SCF is not
+converged in the given number of iterations, an error is thrown.
 
 ```
 $ s-hf lih.in --iter 151
 ```
 
-Does a simple steepest decent geometry optimization:
+Direct SCF can be requested by `--direct`
+
+For a simple steepest decent geometry optimization use
 
 ```
 $ s-hf hhe.in -o
 $ s-hf lih.in --opt
 ```
 
-Use Pulay's DIIS scheme to accelerate SCF convergence.
+To use Pulay's DIIS scheme to accelerate SCF convergence use the `--diis` flag.
 The number of errormatrices used for the DIIS can be specified, default is 6.
 
 ```
@@ -47,21 +50,32 @@ $ s-hf be.in --diis
 $ s-hf lih.in --diis 10
 ```
 
-Enforces an unrestricted Hartree-Fock. At the moment the symmetry is broken
-by using a hcore guess for alpha MOs and a really bad orthonormalizer guess
-for beta MOs
+To enforce an unrestricted Hartree-Fock set `--uhf <nalp-nbet>`.
+At the moment the symmetry is broken for `--uhf 0` cases by using a hcore
+guess for alpha MOs and a really bad orthonormalizer guess for beta MOs
+DIIS seems to fail for this bad guess, so it will be deactivated in case of
+`--uhf 0`.
 
 ```
 $ s-hf li.in --uhf 1
 $ s-hf h2.in --uhf 2
 ```
 
-Does a second order Møller-Plesset many-body pertubation theory calculation,
-employing a O(N5) integral transformation.
+To use a second order Møller-Plesset many-body pertubation theory calculation,
+use the ``--mp2`` flag. Currently only a O(N5) integral transformation is
+in use.
 
 ```
 $ s-hf be.in --mp2
 ```
+
+For Coupled Cluster Doubles in spin orbitals
+
+```
+$ s-hf h2.in --ccd
+```
+
+can be employed.
 
 ## References
 

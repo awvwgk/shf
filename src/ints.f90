@@ -12,8 +12,17 @@ module ints
    interface integrals
    module procedure intdriver_all
    module procedure intdriver_one
+   module procedure intdriver_qcs
    module procedure intdriver_tei
    end interface integrals
+
+   type :: gauss(ng)
+      integer,len :: ng
+      integer  :: l
+      real(wp) :: point(3)
+      real(wp) :: alpha(ng)
+      real(wp) :: coeff(ng)
+   end type gauss
 
    intrinsic :: shape,reshape
 
@@ -183,11 +192,65 @@ subroutine intdriver_all(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T,eri)
 !* to save some memory this packing is possible
 !  real(wp),intent(out) :: S(nbf*(nbf+1)/2),V(nbf*(nbf+1)/2),T(nbf*(nbf+1)/2)
    real(wp),intent(out) :: eri((nbf*(nbf+1)/2)*(nbf*(nbf+1)/2+1)/2)
+   real(wp),allocatable :: qcs(:,:)
 
+   allocate( qcs(nbf,nbf), source = 0.0_wp )
    call intdriver_one(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T)
-   call intdriver_tei(nat,nbf,at,xyz,zeta,aoc,ng,ityp,eri)
+   call intdriver_qcs(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs)
+   call intdriver_tei(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs,eri)
+   deallocate(qcs)
 
 end subroutine intdriver_all
+
+!* driver for calculation of integrals
+subroutine intdriver_qcs(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs)
+   use precision, only : wp => dp
+   use stong,     only : slater
+   implicit none
+   integer, intent(in)  :: nat
+   integer, intent(in)  :: nbf
+   integer, intent(in)  :: ng(nbf)
+   integer, intent(in)  :: ityp(nbf)
+   integer, intent(in)  :: at(nat)
+   integer, intent(in)  :: aoc(2,nat)
+   real(wp),intent(in)  :: zeta(nbf)
+   real(wp),intent(in)  :: xyz(3,nat)
+   real(wp),intent(out) :: qcs(nbf,nbf)
+
+   integer,parameter    :: maxg=6
+   real(wp) :: ci(maxg),cj(maxg),alpi(maxg),alpj(maxg)
+   real(wp) :: ck(maxg),cl(maxg),alpk(maxg),alpl(maxg)
+   real(wp) :: qijij
+   real(wp) :: chrg(nat)
+
+   integer  :: i,j,ii,jj
+   integer  :: ishtyp,jshtyp,kshtyp,lshtyp
+
+   chrg = real(at,wp)
+
+!$omp parallel private(i,j,ii,jj,alpi,alpj,ci,cj,qijij) &
+!$omp          &       shared(qcs)
+!$omp do schedule(dynamic)
+   do i = 1, nat
+      do j = 1, i
+         do ii = aoc(1,i), aoc(2,i)
+            !* on-the-fly expansion
+            call slater(ityp(ii),ng(ii),zeta(ii),alpi,ci) 
+            do jj = aoc(1,j), aoc(2,j)
+               call slater(ityp(jj),ng(jj),zeta(jj),alpj,cj)
+               call qcsint(ng(ii),ng(jj), & ! ,ishtyp,jshtyp, &
+                    &      xyz(:,i),xyz(:,j),alpi,alpj,ci,cj, &
+                    &      qijij)
+               qcs(ii,jj) = qijij
+               qcs(jj,ii) = qijij
+            enddo
+         enddo
+      enddo
+   enddo
+!$omp enddo
+!$omp endparallel
+
+end subroutine intdriver_qcs
 
 !* driver for calculation of integrals
 subroutine intdriver_one(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T)
@@ -217,9 +280,7 @@ subroutine intdriver_one(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T)
    integer  :: i,j,ii,jj
    integer  :: ishtyp,jshtyp,kshtyp,lshtyp
 
-   intrinsic :: dble
-
-   chrg = dble(at)
+   chrg = real(at,wp)
 
 !$omp parallel private(i,j,ii,jj,alpi,alpj,ci,cj,sdum,vdum,tdum) &
 !$omp          &       shared(s,v,t)
@@ -250,7 +311,7 @@ subroutine intdriver_one(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T)
 end subroutine intdriver_one
 
 !* driver for calculation of integrals
-subroutine intdriver_tei(nat,nbf,at,xyz,zeta,aoc,ng,ityp,eri)
+subroutine intdriver_tei(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs,eri)
    use precision, only : wp => dp
    use misc,      only : idx
    use stong,     only : slater
@@ -263,6 +324,7 @@ subroutine intdriver_tei(nat,nbf,at,xyz,zeta,aoc,ng,ityp,eri)
    integer, intent(in)  :: aoc(2,nat)
    real(wp),intent(in)  :: zeta(nbf)
    real(wp),intent(in)  :: xyz(3,nat)
+   real(wp),intent(in)  :: qcs(nbf,nbf)
 !  real(wp),intent(out) :: eri(nbf,nbf,nbf,nbf)
 !* to save some memory this packing is possible
    real(wp),intent(out) :: eri((nbf*(nbf+1)/2)*(nbf*(nbf+1)/2+1)/2)
@@ -275,8 +337,6 @@ subroutine intdriver_tei(nat,nbf,at,xyz,zeta,aoc,ng,ityp,eri)
    integer  :: i,j,k,l,ii,jj,kk,ll,limit
    integer  :: ishtyp,jshtyp,kshtyp,lshtyp
    integer  :: ij,kl,ijkl
-
-   intrinsic :: dble
 
 !$omp parallel private(i,j,k,l,ii,jj,kk,ll,alpi,alpj,alpk,alpl, &
 !$omp          &       limit,ij,kl,ijkl,ci,cj,ck,cl,eridum) &
@@ -299,6 +359,7 @@ subroutine intdriver_tei(nat,nbf,at,xyz,zeta,aoc,ng,ityp,eri)
                            kl = idx(kk,ll)
                            ijkl = idx(ij,kl)
                            call slater(ityp(ll),ng(ll),zeta(ll),alpl,cl)
+                           if ((qcs(ii,jj)*qcs(kk,ll)).lt.s_thr) cycle
                            call twoint(ng(ii),ng(jj),ng(kk),ng(ll), &
                            !    &      ishtyp,jshtyp,kshtyp,lshtyp, &
                                 &      xyz(:,i),xyz(:,j),xyz(:,k),xyz(:,l), &
@@ -392,6 +453,51 @@ pure subroutine oneint(npa,npb,nat,xyz,chrg,r_a,r_b,alp,bet,ci,cj, &
 
 end subroutine oneint
 
+!* Cauchy-Schwarz prescreening integrals
+pure subroutine qcsint(npa,npb,r_a,r_b,alp,bet,ci,cj,qabab)
+   use precision, only : wp => dp
+   implicit none
+
+   integer, intent(in)  :: npa
+   integer, intent(in)  :: npb
+   real(wp),intent(in)  :: r_a(3)
+   real(wp),intent(in)  :: r_b(3)
+   real(wp),intent(in)  :: alp(npa)
+   real(wp),intent(in)  :: bet(npb)
+   real(wp),intent(in)  :: ci(npa)
+   real(wp),intent(in)  :: cj(npb)
+   real(wp),intent(out) :: qabab
+
+   integer  :: i,j
+   real(wp) :: rab,est
+   real(wp) :: eab,oab,cab
+   real(wp) :: ab
+
+   intrinsic :: sum,sqrt,exp
+
+   qabab = 0.0_wp
+
+!  R²(a-b)
+   rab=sum( (r_a-r_b)**2 )
+
+   do i = 1, npa
+      do j = 1, npb
+         cab = ci(i)*cj(j)
+         eab = alp(i)+bet(j)
+         oab = 1.0_wp/eab
+         est = alp(i)*bet(j)*rab*oab
+         if (est.gt.i_thr) then
+            ab = 0.0_wp
+         else
+            ab = exp(-est)
+
+            qabab = qabab + cab*ab * sqrt(twopi25/(sqrt(2*eab**5)))
+         endif
+      enddo
+   enddo
+
+end subroutine qcsint
+
 !* two-electron repulsion integral [ab|cd] over s-functions
 !  quantity is given in chemist's notation
 pure subroutine twoint(npa,npb,npc,npd,r_a,r_b,r_c,r_d, &
@@ -420,14 +526,11 @@ pure subroutine twoint(npa,npb,npc,npd,r_a,r_b,r_c,r_d, &
    integer  :: i,j,k,l
    real(wp) :: rab,rcd,rpq,r_p(3),r_q(3),est
    real(wp) :: eab,ecd,eabcd,epq,oab,ocd,cab,ccd
-   real(wp) :: ab(npa,npb),cd(npc,npd),abcd,pq,sqpq
-   real(wp) :: qabab,qcdcd
+   real(wp) :: ab,cd,abcd,pq,sqpq
 
    intrinsic :: sum,sqrt,exp
 
    tei = 0.0_wp
-   qabab = 0.0_wp
-   qcdcd = 0.0_wp
 
 !  R²(a-b)
    rab=sum( (r_a-r_b)**2 )
@@ -440,39 +543,8 @@ pure subroutine twoint(npa,npb,npc,npd,r_a,r_b,r_c,r_d, &
          eab = alp(i)+bet(j)
          oab = 1.0_wp/eab
          est = alp(i)*bet(j)*rab*oab
-         if (est.gt.i_thr) then
-            ab(i,j) = 0.0_wp
-         else
-            ab(i,j) = exp(-est) ! might be used later
-
-            qabab = qabab + cab*ab(i,j) * sqrt(twopi25/(sqrt(2*eab**5)))
-         endif
-      enddo
-   enddo
-   do k = 1, npc
-      do l = 1, npd
-         ccd = ck(k)*cl(l)
-         ecd = gam(k)+del(l)
-         ocd = 1.0_wp/ecd
-         est = gam(k)*del(l)*rcd*ocd
-         if (est.gt.i_thr) then
-            cd(k,l) = 0.0_wp
-         else
-            cd(k,l) = exp(-est) ! might be used later
-
-            qcdcd = qcdcd + ccd*cd(k,l) * sqrt(twopi25/(sqrt(2*ecd**5)))
-         endif
-      enddo
-   enddo
-!* prescreening by using Schwarz inequality
-!  if the upper bound of the tei falls below a threshold ommit calculation
-   if ((qabab*qcdcd).lt.s_thr) return
-
-   do i = 1, npa
-      do j = 1, npb
-         cab = ci(i)*cj(j)
-         eab = alp(i)+bet(j)
-         oab = 1.0_wp/eab
+         if (est.gt.i_thr) cycle
+         ab = exp(-est)
 
 !        new gaussian at r_p
          r_p = (alp(i)*r_a+bet(j)*r_b)*oab
@@ -482,12 +554,14 @@ pure subroutine twoint(npa,npb,npc,npd,r_a,r_b,r_c,r_d, &
                ccd = ck(k)*cl(l)
                ecd = gam(k)+del(l)
                ocd = 1.0_wp/ecd
+               est = gam(k)*del(l)*rcd*ocd
+               if (est.gt.i_thr) cycle
 
 !              new gaussian at r_q
                r_q = (gam(k)*r_c+del(l)*r_d)*ocd
 
 !              we already have calculated the prefactors
-               abcd = ab(i,j)*cd(k,l)
+               abcd = ab*cd
 
 !              distance between product gaussians
                rpq = sum( (r_p-r_q)**2 )

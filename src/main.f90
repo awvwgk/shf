@@ -40,7 +40,7 @@ program shf
    character(len=3) :: chacc
    integer  :: wftlvl,extmode,acc
    real(wp) :: ethr,pthr,gthr
-   logical  :: first,brsym
+   logical  :: first,brsym,direct_scf
    integer  :: maxiter,err
 
 !* molecule data
@@ -88,7 +88,7 @@ program shf
 
 !* get command line argument, most of the stuff gets initialized here
    call rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
-        &      diis,maxdiis,startdiis)
+        &      diis,maxdiis,startdiis,direct_scf)
 
 !* print some fancy banner
    call banner
@@ -153,12 +153,20 @@ program shf
 
    case(0) !* scf calculation
 
-   allocate( S(nbf,nbf),V(nbf,nbf),T(nbf,nbf), &
-   &         eri(nbf*(nbf+1)/2*(nbf*(nbf+1)/2+1)/2), &
-   &         source = 0.0_wp )
-   call start_timing(2)
-   call integrals(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T,eri)
-   call stop_timing(2)
+   if (direct_scf) then
+      allocate( S(nbf,nbf),V(nbf,nbf),T(nbf,nbf), &
+      &         source = 0.0_wp )
+      call start_timing(2)
+      call integrals(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T)
+      call stop_timing(2)
+   else
+      allocate( S(nbf,nbf),V(nbf,nbf),T(nbf,nbf), &
+      &         eri(nbf*(nbf+1)/2*(nbf*(nbf+1)/2+1)/2), &
+      &         source = 0.0_wp )
+      call start_timing(2)
+      call integrals(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T,eri)
+      call stop_timing(2)
+   endif
 !* debug
 !  call prmat(S,nbf,nbf,name='S')
 !  call prmat(V,nbf,nbf,name='V')
@@ -201,9 +209,15 @@ program shf
 !  endif
 
    call start_timing(3)
+   if (allocated(eri)) then
    call hf(nat,nbf,nalp,nbet,at,xyz,ethr,pthr,first, &
         &  chacc,maxiter,diis,maxdiis,startdiis, &
         &  S,V,T,X,Pa,Pb,H,Fa,Fb,Ca,Cb,eri,epsa,epsb,e)
+   else
+   call hf(nat,nbf,nalp,nbet,at,xyz,ethr,pthr,first, &
+        &  chacc,maxiter,diis,maxdiis,startdiis, &
+        &  S,V,T,zeta,aoc,ng,ityp,X,Pa,Pb,H,Fa,Fb,Ca,Cb,epsa,epsb,e)
+   endif
    call stop_timing(3)
    call prenergy(nat,nbf,nalp,nbet,at,xyz,chacc, &
         &        S,V,T,eri,H,Fa,Fb,Pa,Pb,Ca,Cb,epsa,epsb)
@@ -252,9 +266,16 @@ program shf
    endif
 
    call start_timing(3)
+   if (allocated(eri)) then
    call hf(nat,nbf,nocc,at,xyz,ethr,pthr,first, &
         &  chacc,maxiter,diis,maxdiis,startdiis, &
         &  S,V,T,X,P,H,F,C,eri,eps,e)
+   else
+!* experimental direct scf
+   call hf(nat,nbf,nocc,at,xyz,ethr,pthr,first, &
+        &  chacc,maxiter,diis,maxdiis,startdiis, &
+        &  S,V,T,zeta,aoc,ng,ityp,X,P,H,F,C,eps,e)
+   endif
    call stop_timing(3)
    call prenergy(nat,nbf,nocc,nocc,at,xyz,chacc, &
         &        S,V,T,eri,H,F,F,P,P,C,C,eps,eps)
@@ -274,36 +295,37 @@ program shf
    call loewdin(nat,nbf,at,aoc,S,P,P,X,z)
    call prchrg(nat,at,z,chacc)
 
-!* experimental direct scf
-!  call hf(nat,nbf,nocc,at,xyz,ethr,pthr,first, &
-!       &  chacc,maxiter,diis,maxdiis,startdiis, &
-!       &  zeta,aoc,ng,ityp,S,X,P,H,F,C,eps,e)
-   
+
    if (wftlvl.ge.1) then
+      if (direct_scf) call raise('E','No ERIs have been calculated!')
+      call start_timing(4)
 !     print'('' * doing Θ(N⁸) integral transformation'')'
 !     call teitrafo_N8(nbf,eri,C)
       print'('' * doing Θ(N⁵) integral transformation'')'
       call teitrafo(nbf,eri,C)
-   endif
 
 !* second order Møller-Plesset many-body pertubation theory
-   if (wftlvl.ge.1) then !* MP2
-      call mp2(nbf,nocc,eri,eps,ecorr,chacc)
-      e = e + ecorr
-   endif !* MP2
+      if (wftlvl.ge.1) then !* MP2
+         call mp2(nbf,nocc,eri,eps,ecorr,chacc)
+         e = e + ecorr
+      endif !* MP2
+      call stop_timing(4)
 
-   if (wftlvl.ge.2) then !* CCD
-      e = e - ecorr ! remov MP2 energy
-      if (allocated(F)) deallocate(F)
-      allocate( F(2*nbf,2*nbf),tei(2*nbf,2*nbf,2*nbf,2*nbf),  &
-      &         source = 0.0_wp )
-      call chem2phys(nbf,eri,tei)
-      call onetrafo(nbf,H,C)
-      call spinfockian(nbf,nel,F,H,tei)
-      call prmat(F,2*nbf,2*nbf,name='Spin Fockian')
-      call ccd(nbf,nel,F,tei,ethr,chacc,maxiter,ecorr)
-      e = e + ecorr
-   endif !* CCD
+      if (wftlvl.ge.2) then !* CCD
+         e = e - ecorr ! remov MP2 energy
+         if (allocated(F)) deallocate(F)
+         allocate( F(2*nbf,2*nbf),tei(2*nbf,2*nbf,2*nbf,2*nbf),  &
+         &         source = 0.0_wp )
+         call start_timing(5)
+         call chem2phys(nbf,eri,tei)
+         call onetrafo(nbf,H,C)
+         call spinfockian(nbf,nel,F,H,tei)
+         call prmat(F,2*nbf,2*nbf,name='Spin Fockian')
+         call ccd(nbf,nel,F,tei,ethr,chacc,maxiter,ecorr)
+         call stop_timing(5)
+         e = e + ecorr
+      endif !* CCD
+   endif
    
    endif
    
@@ -343,8 +365,10 @@ program shf
    call stop_timing(1)
    call prdate('E')
    call prtiming(1)
-!  call prtiming(2,'int')
-!  call prtiming(3,'scf')
+   if (.not.direct_scf) call prtiming(2,'int')
+   call prtiming(3,'scf')
+   if (wftlvl.ge.1) call prtiming(4,'mp2')
+   if (wftlvl.eq.2) call prtiming(5,'ccd')
    print'(a)'
 
    call terminate(0)

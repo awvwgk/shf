@@ -3,13 +3,14 @@ module readin
 contains
 
 subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
-           &      diis,maxdiis,startdiis)
+           &      diis,maxdiis,startdiis,direct_scf)
    use precision, only : wp => dp
    use system_tools, only: rdarg,rdvar
    implicit none
    character(len=:), allocatable,intent(out) :: fname
    integer,intent(out) :: wftlvl,extmode,acc,maxiter,nuhf
    logical,intent(out) :: diis
+   logical,intent(out) :: direct_scf
    integer,intent(out) :: maxdiis,startdiis
    integer :: i,j,k,l
    integer :: err,idum
@@ -24,6 +25,7 @@ subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
    wftlvl = 0  ! hf
    extmode = 0 ! sp
    nuhf = -1   ! not set here
+   direct_scf = .false.
 
    acc = 6
    maxiter = 25
@@ -61,6 +63,8 @@ subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
             acc = idum
             if (idum.lt.4) acc = 4
             if (idum.gt.9) acc = 9
+         case('-direct',    '--direct')
+            direct_scf = .true.
          case(     '-diis', '--diis')
             diis = .true.
             if (i+1.le.command_argument_count()) then

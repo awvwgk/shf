@@ -13,8 +13,8 @@ module timings
    private :: stop_date,stop_time,stop_zone,stop_values
    private :: timing
 
-   real(wp),allocatable :: timing_wall(:,:)
-   real(wp),allocatable :: timing_cpu(:,:)
+   real(wp),allocatable :: timing_wall(:)
+   real(wp),allocatable :: timing_cpu(:)
    integer  :: timing_max
    
    character(len=8)  :: start_date,stop_date
@@ -41,9 +41,9 @@ subroutine prtiming(i,inmsg)
       msg = '*'
    endif
    write(output_unit,cpufmt) msg, &
-   &   timing_cpu(2,i)  - timing_cpu(1,i)
+   &   timing_cpu (i)
    write(output_unit,walfmt) msg, &
-   &   timing_wall(2,i) - timing_wall(1,i)
+   &   timing_wall(i)
 end subroutine prtiming
 
 subroutine prdate(mode)
@@ -75,9 +75,11 @@ end subroutine prdate
 subroutine init_timing(i)
    implicit none
    integer,intent(in) :: i
+   if (allocated(timing_wall)) deallocate(timing_wall)
+   if (allocated(timing_cpu))  deallocate(timing_cpu)
    timing_max = i
-   allocate( timing_wall(2,i),  &
-   &         timing_cpu (2,i),  &
+   allocate( timing_wall(i),  &
+   &         timing_cpu (i),  &
    &         source=0.0_wp )
 end subroutine init_timing
 
@@ -90,15 +92,25 @@ subroutine stop_timing_run
 end subroutine stop_timing_run
 
 subroutine start_timing(i)
+   use precision, only : wp => sp ! this is enough for timings
    implicit none
    integer,intent(in) :: i
-   call timing(timing_cpu(1,i),timing_wall(1,i))
+   real(wp) :: time_cpu
+   real(wp) :: time_wall
+   call timing(time_cpu,time_wall)
+   timing_cpu (i) = timing_cpu (i) - time_cpu
+   timing_wall(i) = timing_wall(i) - time_wall
 end subroutine start_timing
 
 subroutine stop_timing(i)
+   use precision, only : wp => sp ! this is enough for timings
    implicit none
    integer,intent(in) :: i
-   call timing(timing_cpu(2,i),timing_wall(2,i))
+   real(wp) :: time_cpu
+   real(wp) :: time_wall
+   call timing(time_cpu,time_wall)
+   timing_cpu (i) = timing_cpu (i) + time_cpu
+   timing_wall(i) = timing_wall(i) + time_wall
 end subroutine stop_timing
 
 subroutine timing(time_cpu,time_wall)

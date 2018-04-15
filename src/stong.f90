@@ -2,6 +2,10 @@ module stong
    use precision, only : wp => dp
    implicit none
 
+   interface slater
+   module procedure slater_single
+   end interface slater
+
    private :: sto1g,sto2g,sto3g,sto4g,sto5g,sto6g
 
    integer, parameter :: nf=15,l(*)=(/0,0,0,0,0,1,1,1,1,2,2,2,3,3,4/)
@@ -12,7 +16,7 @@ module stong
 contains
 
 !* this is just a driver for the STO-NG routines
-pure subroutine slater(ityp,ng,zeta,alpha,coeff)
+pure subroutine slater_single(ityp,ng,zeta,alpha,coeff)
    use precision, only : wp => dp
    implicit none
    integer, intent(in)  :: ityp,ng
@@ -26,7 +30,7 @@ pure subroutine slater(ityp,ng,zeta,alpha,coeff)
    case(5);      call sto5g(ityp,zeta,alpha,coeff)
    case(6);      call sto6g(ityp,zeta,alpha,coeff)
    end select
-end subroutine slater
+end subroutine slater_single
 
 pure subroutine sto1g(ityp,zeta,alpha,coeff)
    use precision, only : wp => dp

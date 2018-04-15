@@ -16,6 +16,9 @@ subroutine help
    print'(3x,''    --iter <int>  '','// &
    &      'x,''maximal number of iterations'')'
 
+   print'(3x,''    --direct      '','// &
+   &      'x,''use a direct SCF approach'')'
+
    print'(3x,''-o, --opt         '','// &
    &      'x,''do a steepest decent geometry optimization'')'
 
