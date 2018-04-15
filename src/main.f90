@@ -28,6 +28,7 @@ program shf
    use cc
 
 !* some analysis
+   use density
    use pop
 
 !* optimisiation stuff
@@ -51,6 +52,7 @@ program shf
    integer, allocatable :: aoc(:,:)
    real(wp),allocatable :: g(:,:)
    real(wp) :: e,ecorr
+   type(tmesh) :: mesh
 
 !* integrals and stuff
    integer, allocatable :: ng(:),ityp(:)
@@ -88,7 +90,7 @@ program shf
 
 !* get command line argument, most of the stuff gets initialized here
    call rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
-        &      diis,maxdiis,startdiis,direct_scf)
+        &      diis,maxdiis,startdiis,direct_scf,mesh)
 
 !* print some fancy banner
    call banner
@@ -232,6 +234,13 @@ program shf
    call loewdin(nat,nbf,at,aoc,S,Pa,Pb,X,z)
    call prchrg(nat,at,z,chacc)
 
+   if (mesh % n.ne.-1) then
+   print'(a)'
+   print'('' * calculation density on mesh points'')'
+   call calc_density(mesh,nat,nbf,at,xyz,zeta,aoc,ng,ityp,Pa,Pb)
+   call prdens(mesh,chacc)
+   endif
+
 !* that's it, no MP2 or CC for you in unrestricted cases
    if (wftlvl.gt.0) call raise('E','Only HF supported for unrestricted case')
 
@@ -295,6 +304,12 @@ program shf
    call loewdin(nat,nbf,at,aoc,S,P,P,X,z)
    call prchrg(nat,at,z,chacc)
 
+   if (mesh % n.ne.-1) then
+   print'(a)'
+   print'('' * calculation density on mesh points'')'
+   call calc_density(mesh,nat,nbf,at,xyz,zeta,aoc,ng,ityp,P,P)
+   call prdens(mesh,chacc)
+   endif
 
    if (wftlvl.ge.1) then
       if (direct_scf) call raise('E','No ERIs have been calculated!')
@@ -365,6 +380,7 @@ program shf
    call stop_timing(1)
    call prdate('E')
    call prtiming(1)
+   print'(a)'
    if (.not.direct_scf) call prtiming(2,'int')
    call prtiming(3,'scf')
    if (wftlvl.ge.1) call prtiming(4,'mp2')

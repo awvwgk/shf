@@ -77,6 +77,17 @@ $ s-hf h2.in --ccd
 
 can be employed.
 
+For a density analysis a mesh can specified as
+
+```
+1> <nmesh>
+2> <x> <y> <z> <weight>
+3> <x> <y> <z> <weight>
+4> ...
+```
+
+The file can be read in by `--dens <mesh.in>`
+
 ## References
 
 This work is mainly inspired by D. Crawford’s programming project.

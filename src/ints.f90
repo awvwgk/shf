@@ -12,7 +12,6 @@ module ints
    interface integrals
    module procedure intdriver_all
    module procedure intdriver_one
-   module procedure intdriver_qcs
    module procedure intdriver_tei
    end interface integrals
 
@@ -25,6 +24,8 @@ module ints
    end type gauss
 
    intrinsic :: shape,reshape
+
+   integer,parameter  :: maxprim = 6
 
    real(wp),parameter :: r_thr = 2500._wp ! S.lt.10e-9 for r.gt.50 bohr
    real(wp),parameter :: i_thr = 25._wp ! integral cut threshold
@@ -173,6 +174,38 @@ module ints
 
 contains
 
+!* expand STO-NGs to gaussians
+subroutine expand_stong(nat,nbf,zeta,aoc,ng,ityp,sh2at,alpha,coeff)
+   use precision, only : wp => dp
+   use stong,     only : slater
+   implicit none
+   integer, intent(in)  :: nat
+   integer, intent(in)  :: nbf
+   real(wp),intent(in)  :: zeta(nbf)
+   integer, intent(in)  :: aoc(2,nat)
+   integer, intent(in)  :: ng(nbf)
+   integer, intent(in)  :: ityp(nbf)
+   integer, intent(out) :: sh2at(nbf)
+   real(wp),intent(out) :: alpha(maxprim,nbf)
+   real(wp),intent(out) :: coeff(maxprim,nbf)
+
+   real(wp) :: ci(maxprim),cj(maxprim),alpi(maxprim),alpj(maxprim)
+   real(wp) :: ck(maxprim),cl(maxprim),alpk(maxprim),alpl(maxprim)
+   real(wp) :: sdum,tdum,vdum,eridum
+   real(wp) :: chrg(nat)
+
+   integer  :: i,j,ii,jj
+   integer  :: ishtyp,jshtyp,kshtyp,lshtyp
+
+   do i = 1, nat
+      do ii = aoc(1,i), aoc(2,i)
+         call slater(ityp(ii),ng(ii),zeta(ii),alpha(:,ii),coeff(:,ii)) 
+         sh2at(ii) = i
+      enddo
+   enddo
+
+end subroutine expand_stong
+
 !* driver for driver for calculation of integrals
 subroutine intdriver_all(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T,eri)
    use precision, only : wp => dp
@@ -220,16 +253,13 @@ subroutine intdriver_qcs(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs)
    real(wp),intent(in)  :: xyz(3,nat)
    real(wp),intent(out) :: qcs(nbf,nbf)
 
-   integer,parameter    :: maxg=6
-   real(wp) :: ci(maxg),cj(maxg),alpi(maxg),alpj(maxg)
-   real(wp) :: ck(maxg),cl(maxg),alpk(maxg),alpl(maxg)
+   real(wp) :: ci(maxprim),cj(maxprim),alpi(maxprim),alpj(maxprim)
+   real(wp) :: ck(maxprim),cl(maxprim),alpk(maxprim),alpl(maxprim)
    real(wp) :: qijij
    real(wp) :: chrg(nat)
 
    integer  :: i,j,ii,jj
    integer  :: ishtyp,jshtyp,kshtyp,lshtyp
-
-   chrg = real(at,wp)
 
 !$omp parallel private(i,j,ii,jj,alpi,alpj,ci,cj,qijij) &
 !$omp          &       shared(qcs)
@@ -274,9 +304,8 @@ subroutine intdriver_one(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T)
 !* to save some memory this packing is possible
 !  real(wp),intent(out) :: S(nbf*(nbf+1)/2),V(nbf*(nbf+1)/2),T(nbf*(nbf+1)/2)
 
-   integer,parameter    :: maxg=6
-   real(wp) :: ci(maxg),cj(maxg),alpi(maxg),alpj(maxg)
-   real(wp) :: ck(maxg),cl(maxg),alpk(maxg),alpl(maxg)
+   real(wp) :: ci(maxprim),cj(maxprim),alpi(maxprim),alpj(maxprim)
+   real(wp) :: ck(maxprim),cl(maxprim),alpk(maxprim),alpl(maxprim)
    real(wp) :: sdum,tdum,vdum,eridum
    real(wp) :: chrg(nat)
 
@@ -332,9 +361,8 @@ subroutine intdriver_tei(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs,eri)
 !* to save some memory this packing is possible
    real(wp),intent(out) :: eri((nbf*(nbf+1)/2)*(nbf*(nbf+1)/2+1)/2)
 
-   integer,parameter    :: maxg=6
-   real(wp) :: ci(maxg),cj(maxg),alpi(maxg),alpj(maxg)
-   real(wp) :: ck(maxg),cl(maxg),alpk(maxg),alpl(maxg)
+   real(wp) :: ci(maxprim),cj(maxprim),alpi(maxprim),alpj(maxprim)
+   real(wp) :: ck(maxprim),cl(maxprim),alpk(maxprim),alpl(maxprim)
    real(wp) :: sdum,tdum,vdum,eridum
 
    integer  :: i,j,k,l,ii,jj,kk,ll,limit

@@ -19,6 +19,9 @@ subroutine help
    print'(3x,''    --direct      '','// &
    &      'x,''use a direct SCF approach'')'
 
+   print'(3x,''    --dens <file> '','// &
+   &      'x,''evaluate density on mesh specified in <file>'')'
+
    print'(3x,''-o, --opt         '','// &
    &      'x,''do a steepest decent geometry optimization'')'
 

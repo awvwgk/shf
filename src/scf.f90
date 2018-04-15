@@ -1,6 +1,4 @@
 module scf
-   use precision, only : wp => dp
-   implicit none
 
 !* use this nice overloading feature of FORTRAN to
 !  combine all SCF variants in one name
@@ -9,9 +7,9 @@ module scf
    module procedure uhf_conventional
    module procedure rhf_direct
    module procedure uhf_direct
+!  module procedure rhf_delta
+!  module procedure uhf_delta
    end interface hf
-
-   real(wp),parameter :: s_thr = 1e-9_wp ! Schwarz inequaltity threshold
 
 contains
 
@@ -252,7 +250,7 @@ subroutine rhf_conventional &
       P_save = P
       call build_density(nbf,nocc,P,C)
       e = enuc+escf(H,F,P,nbf)
-      rmsd = sqrt( sum( (P-P_save)**2 ) )
+      rmsd = sqrt( sum( (P-P_save)**2 ) )/real(nbf,wp)
 
       write(id,'(x,i5)',advance='no') iter
       write(id,'(x,f16.'//acc//')',advance='no') e
@@ -550,7 +548,7 @@ subroutine rhf_direct &
    scf: do
       iter = iter+1
       if (iter.gt.maxiter) call raise('E','SCF did not converge')
-      call direct_fock(nat,nbf,xyz,H,F,P,zeta,aoc,ng,ityp,qcs)
+      call direct_fock(nat,nbf,xyz,H,F,P,zeta,aoc,ng,ityp,qcs,pthr)
 
       if (ldiis) then !* DIIS
       call build_diis(nbf,iter,maxdiis,S,F,P,F_save,emat,emax,cdiis,ldiis)
@@ -682,7 +680,7 @@ subroutine uhf_direct &
    scf: do
       iter = iter+1
       if (iter.gt.maxiter) call raise('E','SCF did not converge')
-      call direct_ufock(nat,nbf,xyz,H,Fa,Fb,Pa,Pb,zeta,aoc,ng,ityp,qcs)
+      call direct_ufock(nat,nbf,xyz,H,Fa,Fb,Pa,Pb,zeta,aoc,ng,ityp,qcs,pthr)
       
       if (ldiis) then !* DIIS
       call build_diis(nbf,iter,maxdiis,S,Fa,Pa,Fa_save,  &
@@ -731,9 +729,9 @@ subroutine uhf_direct &
 
 end subroutine uhf_direct
 
-subroutine direct_fock(nat,nbf,xyz,H,F,P,zeta,aoc,ng,ityp,qcs)
+subroutine direct_fock(nat,nbf,xyz,H,F,P,zeta,aoc,ng,ityp,qcs,pthr)
    use precision, only : wp => dp
-   use ints,      only : twoint
+   use ints,      only : maxprim,twoint
    use stong,     only : slater
    use misc,      only : idx
    implicit none
@@ -745,15 +743,15 @@ subroutine direct_fock(nat,nbf,xyz,H,F,P,zeta,aoc,ng,ityp,qcs)
    integer, intent(in)  :: ng(nbf)
    integer, intent(in)  :: ityp(nbf)
    real(wp),intent(in)  :: qcs(nbf,nbf)
+   real(wp),intent(in)  :: pthr
    real(wp),intent(in)  :: H(nbf,nbf)
    real(wp),intent(in)  :: P(nbf,nbf)
    real(wp),intent(out) :: F(nbf,nbf)
 
    integer  :: i,ii,j,jj,k,kk,l,ll
    integer  :: ij,kl,ijkl,limit
-   integer,parameter    :: maxg=6
-   real(wp) :: ci(maxg),cj(maxg),alpi(maxg),alpj(maxg)
-   real(wp) :: ck(maxg),cl(maxg),alpk(maxg),alpl(maxg)
+   real(wp) :: ci(maxprim),cj(maxprim),alpi(maxprim),alpj(maxprim)
+   real(wp) :: ck(maxprim),cl(maxprim),alpk(maxprim),alpl(maxprim)
    real(wp) :: eri,scij,sckl,scijkl,degscal,pmax
    real(wp),allocatable :: G(:,:)
    logical  :: done((nbf*(nbf+1)/2)*(nbf*(nbf+1)/2+1)/2)
@@ -781,7 +779,7 @@ subroutine direct_fock(nat,nbf,xyz,H,F,P,zeta,aoc,ng,ityp,qcs)
                            done(ijkl) = .true.
                            pmax = max(4*P(ii,jj),4*P(kk,ll),  &
                            &          P(ii,kk),P(ii,ll),P(jj,kk),P(jj,ll))
-                           if ((qcs(ii,jj)*qcs(kk,ll)*pmax).lt.s_thr) cycle
+                           if ((qcs(ii,jj)*qcs(kk,ll)*pmax).lt.pthr) cycle
                            if (ii.eq.jj) then
                               scij = 1.0_wp
                            else
@@ -823,9 +821,9 @@ subroutine direct_fock(nat,nbf,xyz,H,F,P,zeta,aoc,ng,ityp,qcs)
 
 end subroutine direct_fock
 
-subroutine direct_ufock(nat,nbf,xyz,H,Fa,Fb,Pa,Pb,zeta,aoc,ng,ityp,qcs)
+subroutine direct_ufock(nat,nbf,xyz,H,Fa,Fb,Pa,Pb,zeta,aoc,ng,ityp,qcs,pthr)
    use precision, only : wp => dp
-   use ints,      only : twoint
+   use ints,      only : maxprim,twoint
    use stong,     only : slater
    use misc,      only : idx
    implicit none
@@ -837,6 +835,7 @@ subroutine direct_ufock(nat,nbf,xyz,H,Fa,Fb,Pa,Pb,zeta,aoc,ng,ityp,qcs)
    integer, intent(in)  :: ng(nbf)
    integer, intent(in)  :: ityp(nbf)
    real(wp),intent(in)  :: qcs(nbf,nbf)
+   real(wp),intent(in)  :: pthr
    real(wp),intent(in)  :: H(nbf,nbf)
    real(wp),intent(in)  :: Pa(nbf,nbf)
    real(wp),intent(in)  :: Pb(nbf,nbf)
@@ -845,9 +844,8 @@ subroutine direct_ufock(nat,nbf,xyz,H,Fa,Fb,Pa,Pb,zeta,aoc,ng,ityp,qcs)
 
    integer  :: i,ii,j,jj,k,kk,l,ll
    integer  :: ij,kl,ijkl,limit
-   integer,parameter    :: maxg=6
-   real(wp) :: ci(maxg),cj(maxg),alpi(maxg),alpj(maxg)
-   real(wp) :: ck(maxg),cl(maxg),alpk(maxg),alpl(maxg)
+   real(wp) :: ci(maxprim),cj(maxprim),alpi(maxprim),alpj(maxprim)
+   real(wp) :: ck(maxprim),cl(maxprim),alpk(maxprim),alpl(maxprim)
    real(wp) :: eri,scij,sckl,scijkl,degscal,Pij,Pkl,pmax
    real(wp),allocatable :: Ga(:,:),Gb(:,:)
    logical  :: done((nbf*(nbf+1)/2)*(nbf*(nbf+1)/2+1)/2)
@@ -878,7 +876,7 @@ subroutine direct_ufock(nat,nbf,xyz,H,Fa,Fb,Pa,Pb,zeta,aoc,ng,ityp,qcs)
                            pmax = max(2*Pij,2*Pkl,  &
                            &          Pa(ii,kk),Pa(ii,ll),Pa(jj,kk),Pa(jj,ll),&
                            &          Pb(ii,kk),Pb(ii,ll),Pb(jj,kk),Pb(jj,ll))
-                           if ((qcs(ii,jj)*qcs(kk,ll)*pmax).lt.s_thr) cycle
+                           if ((qcs(ii,jj)*qcs(kk,ll)*pmax).lt.pthr) cycle
                            if (ii.eq.jj) then
                               scij = 1.0_wp
                            else

@@ -3,15 +3,17 @@ module readin
 contains
 
 subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
-           &      diis,maxdiis,startdiis,direct_scf)
+           &      diis,maxdiis,startdiis,direct_scf,mesh)
    use precision, only : wp => dp
    use system_tools, only: rdarg,rdvar
+   use density, only : tmesh,rdmesh
    implicit none
    character(len=:), allocatable,intent(out) :: fname
    integer,intent(out) :: wftlvl,extmode,acc,maxiter,nuhf
    logical,intent(out) :: diis
    logical,intent(out) :: direct_scf
    integer,intent(out) :: maxdiis,startdiis
+   type(tmesh),intent(out) :: mesh
    integer :: i,j,k,l
    integer :: err,idum
    logical :: exist
@@ -26,6 +28,7 @@ subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
    extmode = 0 ! sp
    nuhf = -1   ! not set here
    direct_scf = .false.
+   mesh % n = -1
 
    acc = 6
    maxiter = 25
@@ -107,6 +110,12 @@ subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
                   call raise('E','File not found: '//arg)
                endif
             endif
+         case(     '-dens', '--dens')
+            j = 1
+            call rdarg(i+1,sec)
+            inquire(file=sec,exist=exist)
+            if (.not.exist) call raise('E','File not found: '//sec)
+            call rdmesh(sec,mesh)
          end select
       else
          inquire(file=arg,exist=exist)
