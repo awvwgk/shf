@@ -28,7 +28,7 @@ program shf
    use mbpt
    use cc
    use ci
-!  use rpa
+   use rpa
 
 !* some analysis
    use density
@@ -364,15 +364,15 @@ program shf
       call chem2phys(nbf,eri,tei)
       call onetrafo(nbf,H,C)
       call spinfockian(nbf,nel,F,H,tei)
-      call stop_timing(4)
 
       if (wftlvl.eq.1) then
          call cis(nbf,nel,F,tei,chacc)
       endif
 
       if (wftlvl.eq.2) then
-         call raise('E','TD-HF not implemented yet')
+         call tdhf(nbf,nel,F,tei,chacc)
       endif
+      call stop_timing(4)
 
    endif !* extmode
    
@@ -417,8 +417,13 @@ program shf
    print'(a)'
    if (.not.direct_scf) call prtiming(2,'int')
    call prtiming(3,'scf')
+   if (extmode.eq.0) then
    if (wftlvl.ge.1) call prtiming(4,'mp2')
    if (wftlvl.eq.2) call prtiming(5,'ccd')
+   else
+   if (wftlvl.eq.1) call prtiming(4,'cis')
+   if (wftlvl.eq.2) call prtiming(4,'rpa')
+   endif
    print'(a)'
 
    call terminate(0)

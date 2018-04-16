@@ -82,6 +82,7 @@ OBJS2 := scf.o\
          mbpt.o\
          cc.o\
          ci.o\
+         rpa.o\
          opt.o
 # to be save, put your modules here
 OBJS3 := precision.o\
