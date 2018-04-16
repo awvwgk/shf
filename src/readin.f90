@@ -102,8 +102,8 @@ subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
             wftlvl = 2
          case(     '-ccsd','--ccsd')
             wftlvl = 3
-         case(     '-ccpt','--ccpt')
-            wftlvl = 4
+!        case(     '-ccpt','--ccpt')
+!           wftlvl = 4
          case default
             inquire(file=arg,exist=exist)
             if (exist) then

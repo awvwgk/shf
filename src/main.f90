@@ -419,14 +419,15 @@ program shf
    call prdate('E')
    call prtiming(1)
    print'(a)'
-   if (.not.direct_scf) call prtiming(2,'int')
-   call prtiming(3,'scf')
+   if (.not.direct_scf) call prtiming(2,'int ')
+   call prtiming(3,'scf ')
    if (extmode.eq.0) then
-   if (wftlvl.eq.1) call prtiming(4,'mp2')
-   if (wftlvl.eq.2) call prtiming(5,'ccd')
+   if (wftlvl.eq.1) call prtiming(4,'mp2 ')
+   if (wftlvl.eq.2) call prtiming(5,'ccd ')
+   if (wftlvl.eq.3) call prtiming(5,'ccsd')
    else
-   if (wftlvl.eq.1) call prtiming(4,'cis')
-   if (wftlvl.eq.2) call prtiming(4,'rpa')
+   if (wftlvl.eq.1) call prtiming(4,'cis ')
+   if (wftlvl.eq.2) call prtiming(4,'tdhf')
    endif
    print'(a)'
 

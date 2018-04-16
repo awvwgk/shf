@@ -38,10 +38,13 @@ subroutine help
 !  &      'x,''use the spin compound scaled MP2 variant'')'
 
    print'(3x,''    --ccd         '','// &
-   &      'x,''do coupled cluster with double excitation (untested)'')'
+   &      'x,''do coupled cluster with double excitation'')'
 
-!  print'(3x,''    --ccsd(t)     '','// &
-!  &      'x,''include also triple excitation pertubatively'')'
+   print'(3x,''    --ccsd        '','// &
+   &      'x,''do coupled cluster with single and double excitation'')'
+
+!  print'(3x,''    --ccpt        '','// &
+!  &      'x,''adds triple excitations pertubatively (for CCD/CCSD)'')'
 
    print'(3x,''    --tdhf        '','// &
    &      'x,''calculate excited states with TD-HF'')'
