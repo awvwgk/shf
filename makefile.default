@@ -31,7 +31,7 @@ NAME := s-hf
 ###------------------------------------------------------------------------###
 # some options first
 BUILD_IN_BIN := no
-DEBUG_BUILD  := yes
+DEBUG_BUILD  := no
 
 # beware! this means if you modify this file everything gets updated
 # if you only edit this section, keeping this false might be a good idea
@@ -69,13 +69,14 @@ OBJS0 := help.o\
          strings.o\
          system_tools.o\
          misc.o\
-			timings.o
+         typedef.o\
+         timings.o
 OBJS1 := diis.o\
          ints.o\
          stong.o\
          pop.o\
-			density.o\
-			guess.o\
+         density.o\
+         guess.o\
          geom.o
 OBJS2 := scf.o\
          mbpt.o\
@@ -128,6 +129,7 @@ CXX := $(CC)
 # compile flags
 # FORTRAN
 FCFLAGS := -O -axAVX -qopenmp
+FCFLAGS += -traceback
 FCFLAGS += -module $(MODDIR)
 FCFLAGS += -I$(INCDIR)                       \
            -I$(MKLROOT)/include/intel64/lp64 \
@@ -140,14 +142,14 @@ CXXFLAGS := -O
 CXXFLAGS += -std=c++11
 # check for debug build
 ifeq ($(DEBUG_BUILD),yes)
-FCFLAGS += -g -traceback
+FCFLAGS += -g -CU -C -fpe0 -debug -qopenmp
 CCFLAGS += -g -DEBUG
 endif # DEBUG
 
 # linker
 LD := ifort
 # general flags for linking, this is build incremental to get an overview
-LDFLAGS := -static -fopenmp
+LDFLAGS := -O -static -fopenmp
 # add path to libraries
 LDFLAGS += -L$(MKLROOT)/lib/intel64 \
            -L$(LIBDIR)

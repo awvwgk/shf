@@ -1,12 +1,6 @@
 module density
    use precision, only : wp => dp
-
-   type :: tmesh
-      integer :: n
-      real(wp),allocatable :: w(:)     !  allocate( w(n) )
-      real(wp),allocatable :: xyz(:,:) !  allocate( xyz(3,n) )
-      real(wp),allocatable :: rho(:,:) !  allocate( rho(n,2) )
-   end type tmesh
+   use typedef,   only : tmesh
 
 contains
 

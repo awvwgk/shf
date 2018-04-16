@@ -5,6 +5,7 @@ contains
 subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
            &      diis,maxdiis,startdiis,direct_scf,mesh)
    use precision, only : wp => dp
+   use typedef, only : tmesh
    use system_tools, only: rdarg,rdvar
    use density, only : tmesh,rdmesh
    implicit none

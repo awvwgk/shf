@@ -14,6 +14,7 @@
 !!================================================================= 1803
 program shf
    use precision, only : wp => dp
+   use typedef
 
 !* input/output modules
    use readin
