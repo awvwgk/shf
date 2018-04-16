@@ -13,24 +13,33 @@ subroutine chem2phys(nbf,eri,tei)
    real(wp),intent(in)  :: eri((nbf*(nbf+1)/2)*((nbf*(nbf+1)/2)+1)/2)
    real(wp),intent(out) :: tei(2*nbf,2*nbf,2*nbf,2*nbf)
    integer  :: i,j,k,l,ik,il,jk,jl,ikjl,iljk
+   integer  :: ih,jh,kh,lh,im,jm,km,lm
    real(wp) :: eri1,eri2
    tei = 0.0_wp
    do i = 1, 2*nbf
+      ih = i/2
+      im = mod(i,2)
       do j = 1, 2*nbf
+         jh = j/2
+         jm = mod(j,2)
          do k = 1, 2*nbf
+            kh = k/2
+            km = mod(k,2)
             do l = 1, 2*nbf
-               ik = idx(ceiling(i/2.0),ceiling(k/2.0))
-               jl = idx(ceiling(j/2.0),ceiling(l/2.0))
-               il = idx(ceiling(i/2.0),ceiling(l/2.0))
-               jk = idx(ceiling(j/2.0),ceiling(k/2.0))
+               lh = l/2
+               lm = mod(l,2)
+               ik = idx(ih+im,kh+km)
+               jl = idx(jh+jm,lh+lm)
+               il = idx(ih+im,lh+lm)
+               jk = idx(jh+jm,kh+km)
                ikjl = idx(ik,jl)
                iljk = idx(il,jk)
-               if ((mod(i,2).eq.mod(k,2)).and.(mod(j,2).eq.mod(l,2))) then
+               if ((im.eq.km).and.(jm.eq.lm)) then
                   eri1 = eri(ikjl)
                else
                   eri1 = 0.0_wp
                endif
-               if ((mod(i,2).eq.mod(l,2)).and.(mod(j,2).eq.mod(l,2))) then
+               if ((im.eq.lm).and.(jm.eq.km)) then
                   eri2 = eri(iljk)
                else
                   eri2 = 0.0_wp
@@ -49,14 +58,18 @@ subroutine spinfockian(nbf,nel,F,H,tei)
    real(wp),intent(out) :: F(2*nbf,2*nbf)
    real(wp),intent(in)  :: H(nbf,nbf)
    real(wp),intent(in)  :: tei(2*nbf,2*nbf,2*nbf,2*nbf)
-   integer  :: i,j,k
+   integer  :: i,j,k,ih,jh,im,jm
    real(wp) :: g
 
    F = 0.0_wp
 
    do i = 1, 2*nbf
+      ih = i/2
+      im = mod(i,2)
       do j = 1, 2*nbf
-         if (mod(i,2).eq.mod(j,2)) F(j,i) = H(ceiling(j/2.0),ceiling(i/2.0))
+         jh = j/2
+         jm = mod(j,2)
+         if (im.eq.jm) F(j,i) = H(ih+im,jh+jm)
          g = 0.0_wp
          do k = 1, nel
             g = g + tei(j,k,i,k)

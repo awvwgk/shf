@@ -54,7 +54,7 @@ subroutine solve_cis(nbf,nel,F,tei,acc)
 
    call prmat(H,ncis,ncis,'CIS Hamiltonian')
 
-   call syev(H,E,'v','u',err)
+   call syev(H,E,'n','u',err)
    if (err.ne.0) call raise('E','could not solve CIS Hamiltonian')
 
    call prvec(E*autoeV,ncis,'excitation energies in eV')

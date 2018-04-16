@@ -259,7 +259,7 @@ subroutine prvec_e(vec,d1,name,inunit,instep)
    else
       step = 4
    endif
-   if(present(name)) write(unit,'(/,''matrix printed:'',x,a)') name
+   if(present(name)) write(unit,'(/,''vector printed:'',x,a)') name
    do i = 1, d1, step
       l = min(i+step-1,d1)
       write(unit,'(/,6x)',advance='no')
