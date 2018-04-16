@@ -51,15 +51,20 @@ subroutine spinfockian(nbf,nel,F,H,tei)
    real(wp),intent(in)  :: tei(2*nbf,2*nbf,2*nbf,2*nbf)
    integer  :: i,j,k
    real(wp) :: g
+
+   F = 0.0_wp
+
    do i = 1, 2*nbf
       do j = 1, 2*nbf
+         if (mod(i,2).eq.mod(j,2)) F(j,i) = H(ceiling(j/2.0),ceiling(i/2.0))
          g = 0.0_wp
          do k = 1, nel
             g = g + tei(j,k,i,k)
          enddo
-         F(j,i) = H(ceiling(j/2.0),ceiling(i/2.0)) + g
+         F(j,i) = F(j,i) + g
       enddo
    enddo
+
 end subroutine spinfockian
    
 subroutine solve_ccd(nbf,nel,F,tei,ethr,acc,maxiter,e)
@@ -109,7 +114,8 @@ subroutine solve_ccd(nbf,nel,F,tei,ethr,acc,maxiter,e)
       do j = 1, nel
          do a = 1, nvir
             do b = 1, nvir
-               D2(a,b,i,j) = 1.0_wp/(F(i,i)+F(j,j)-F(a+nel,a+nel)-F(b+nel,b+nel))
+               D2(a,b,i,j) = 1.0_wp/( F(i,i) + F(j,j)  &
+               &   - F(a+nel,a+nel) - F(b+nel,b+nel) )
                T2(a,b,i,j) = tei(a+nel,b+nel,i,j) * D2(a,b,i,j)
             enddo
          enddo
@@ -130,6 +136,7 @@ subroutine solve_ccd(nbf,nel,F,tei,ethr,acc,maxiter,e)
    write(id,'(7(''-'')''[RMS(T)]'')', advance='no')
    write(id,'(15(''-''))')
    write(id,'(x,i5,x,f16.'//acc//')'),iter,eold
+
    cciter: do
       iter = iter+1
       if (iter.gt.maxiter) call raise('E','CCD did not converge')
@@ -143,7 +150,7 @@ subroutine solve_ccd(nbf,nel,F,tei,ethr,acc,maxiter,e)
       call build_T2(nbf,nel,nvir,F,tei,TS,Fac,Fki,Wklij,Wkbcj,D2,T2)
 
       e = ccd_energy(nbf,nel,nvir,tei,T2)
-      rmsd = sqrt( sum( (T2-TS)**2 ) )
+      rmsd = sqrt( sum( (T2-TS)**2 ) )/real(nel*nvir,wp)
 
       write(id,'(x,i5)',advance='no') iter
       write(id,'(x,f16.'//acc//')',advance='no') e

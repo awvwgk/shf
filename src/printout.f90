@@ -7,6 +7,12 @@ module printout
    module procedure prsymat_f
    end interface prmat
 
+   interface prvec
+   module procedure prvec_e
+!  module procedure prvec_f
+   end interface prvec
+
+
 contains
 
 subroutine prenergy(nat,nbf,nalp,nbet,at,xyz,acc, &
@@ -60,8 +66,9 @@ subroutine prenergy(nat,nbf,nalp,nbet,at,xyz,acc, &
 
 end subroutine prenergy
 
-subroutine prinput(fname,nat,nel,nocc,nalp,nbet,nbf,at,xyz,zeta,aoc,ng,brsym)
+subroutine prinput(fname,nat,nel,nocc,nalp,nbet,nbf,at,xyz,bas,brsym)
    use precision, only : wp => dp
+   use typedef, only : basis
    use strings, only : capitalize
    !use geom, only : comshift
    implicit none
@@ -71,9 +78,7 @@ subroutine prinput(fname,nat,nel,nocc,nalp,nbet,nbf,at,xyz,zeta,aoc,ng,brsym)
    logical, intent(in)    :: brsym
    integer, intent(in)    :: at(nat)
    real(wp),intent(inout) :: xyz(3,nat)
-   real(wp),intent(in)    :: zeta(nbf)
-   integer, intent(in)    :: aoc(2,nat)
-   integer, intent(in)    :: ng(nbf)
+   type(basis),intent(in) :: bas
 
    real(wp) :: com(3)
    integer :: i
@@ -94,7 +99,7 @@ subroutine prinput(fname,nat,nel,nocc,nalp,nbet,nbf,at,xyz,zeta,aoc,ng,brsym)
    print'('' Number of el. pairs :'',i18)',nocc
    endif
    print'('' Number of AOs       :'',i18)',nbf
-   print'('' Number of prim. AOs :'',i18)',sum(ng)
+   print'('' Number of prim. AOs :'',i18)',sum(bas % ng)
    print'(''-[#]---[Z]----------[x]------[y]------[z]-''30(''-''))'
    do i = 1, nat
       print'(i3,x,i5,x,a2,x,3(x,f8.3))', &
@@ -233,6 +238,43 @@ elemental function esym(i) result(sym)
       sym = pse(i)
    endif
 end function esym
+
+subroutine prvec_e(vec,d1,name,inunit,instep)
+   use iso_fortran_env, only : output_unit
+   use precision, only : wp => dp
+   implicit none
+   integer, intent(in) :: d1
+   real(wp),intent(in) :: vec(d1)
+   character(len=*),intent(in),optional :: name
+   integer, intent(in),optional :: inunit
+   integer, intent(in),optional :: instep
+   integer :: i,j,k,l,step,unit
+   if (present(inunit)) then
+      unit = inunit
+   else
+      unit = output_unit
+   endif
+   if (present(instep)) then
+      step = instep
+   else
+      step = 4
+   endif
+   if(present(name)) write(unit,'(/,''matrix printed:'',x,a)') name
+   do i = 1, d1, step
+      l = min(i+step-1,d1)
+      write(unit,'(/,6x)',advance='no')
+      do k = i, l
+      write(unit,'(6x,i7,3x)',advance='no') k
+      enddo
+      write(unit,'(a)')
+      write(unit,'(6x)',advance='no')
+      do k = i, l
+      write(unit,'(x,e15.8)',advance='no') vec(k)
+      enddo
+      write(unit,'(a)')
+   enddo
+   return
+end subroutine prvec_e
 
 subroutine prgemat_e(mat,d1,d2,name,inunit,instep)
    use iso_fortran_env, only : output_unit

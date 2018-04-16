@@ -7,7 +7,7 @@ subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
    use precision, only : wp => dp
    use typedef, only : tmesh
    use system_tools, only: rdarg,rdvar
-   use density, only : tmesh,rdmesh
+   use density, only : rdmesh
    implicit none
    character(len=:), allocatable,intent(out) :: fname
    integer,intent(out) :: wftlvl,extmode,acc,maxiter,nuhf
@@ -29,7 +29,7 @@ subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
    extmode = 0 ! sp
    nuhf = -1   ! not set here
    direct_scf = .false.
-   mesh % n = -1
+   mesh % n = -1 ! not set here
 
    acc = 6
    maxiter = 25
@@ -67,7 +67,7 @@ subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
             acc = idum
             if (idum.lt.4) acc = 4
             if (idum.gt.9) acc = 9
-         case('-direct',    '--direct')
+         case('-d','-direct','--direct')
             direct_scf = .true.
          case(     '-diis', '--diis')
             diis = .true.
@@ -80,14 +80,14 @@ subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
             if (idum.lt.3) maxdiis = 3
             endif
             endif
-         case(     '-iter', '--iter')
+         case('-i','-iter', '--iter')
             j = 1
             call rdarg(i+1,sec)
             read(sec,*,iostat=err) idum
             if(err.ne.0) call raise('E','Bad input (iter)')
             maxiter = idum
             if (idum.lt.1) call raise('E','iter<1 is not supported')
-         case(     '-uhf',  '--uhf')
+         case('-u','-uhf',  '--uhf')
             j = 1
             call rdarg(i+1,sec)
             read(sec,*,iostat=err) idum
@@ -111,6 +111,12 @@ subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
                   call raise('E','File not found: '//arg)
                endif
             endif
+         case(     '-cis',  '--cis')
+            extmode = 2
+            wftlvl = 1
+         case(     '-tdhf', '--tdhf')
+            extmode = 2
+            wftlvl = 2
          case(     '-dens', '--dens')
             j = 1
             call rdarg(i+1,sec)
@@ -129,30 +135,32 @@ subroutine rdargv(fname,wftlvl,extmode,nuhf,acc,maxiter, &
    enddo
 end subroutine rdargv
 
-subroutine rdinput(fname,nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C)
+subroutine rdinput(fname,nat,nel,nbf,at,xyz,bas,C)
    use iso_fortran_env, only : input_unit
    use precision, only : wp => dp
+   use typedef, only : basis
    implicit none
 !* INPUT
-   intent(in) :: fname
-   character(len=:),allocatable :: fname
+   character(len=:),allocatable,intent(in) :: fname
 !* OUTPUT
-   intent(out) :: nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C
-   integer :: nat,nel,nbf
-   integer, allocatable :: at(:)
-   real(wp),allocatable :: xyz(:,:)
-   real(wp),allocatable :: zeta(:)
-   integer, allocatable :: aoc(:,:)
-   integer, allocatable :: ng(:)
-   integer, allocatable :: ityp(:)
-   real(wp),allocatable :: C(:,:)
+   integer, intent(out) :: nat
+   integer, intent(out) :: nel
+   integer, intent(out) :: nbf
+   integer, allocatable,intent(out) :: at(:)
+   real(wp),allocatable,intent(out) :: xyz(:,:)
+   type(basis),intent(out) :: bas
+!  real(wp),allocatable,intent(out) :: zeta(:)
+!  integer, allocatable,intent(out) :: aoc(:,:)
+!  integer, allocatable,intent(out) :: ng(:)
+!  integer, allocatable,intent(out) :: ityp(:)
+   real(wp),allocatable,intent(out) :: C(:,:)
 !* TEMPORARY
    character(len=72) :: line
    character(len=2)  :: chdum
    integer  :: i,j,k,ibf,iz,err,id,ii,idum
    logical  :: stdin
    logical  :: exist
-   real(wp) :: x,y,z,dum
+   real(wp) :: x,y,z,dum,zeta
 
    id = 42
    stdin = .false.
@@ -177,12 +185,13 @@ subroutine rdinput(fname,nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C)
    if (nel.lt.1) call raise('E','No electrons')
    if (nbf.lt.1) call raise('E','No basis functions')
 !* Now make some space for your arrays
-   allocate( xyz(3,nat), zeta(nbf), &
+   bas % n = nbf
+   allocate( xyz(3,nat), bas % zeta(nbf), &
    &         source = 0.0_wp )
-   allocate( at(nat), aoc(2,nat), &
+   allocate( at(nat), bas % aoc(2,nat), &
    &         source = 0 )
-   allocate( ityp(nbf), source = 1 )
-   allocate( ng(nbf), source = 6 )
+   allocate( bas % ityp(nbf), source = 1 )
+   allocate( bas % ng(nbf), source = 6 )
 !* actually nbf is redundant, but lets check if the user has given 
 !  the right value
    k=0
@@ -202,40 +211,41 @@ subroutine rdinput(fname,nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C)
          if(err.ne.0) call raise('E','Error while reading exponents')
          read(line,*,iostat=err) dum,chdum,idum
          if(err.ne.0) then
-            read(line,*,iostat=err) zeta(k+j)
+            read(line,*,iostat=err) zeta
+            bas % zeta(k+j) = zeta
             if(err.ne.0) call raise('E','Error while reading exponents')
-            ng(j) = 6
-            ityp(j) = 1
+            bas % ng(j) = 6
+            bas % ityp(j) = 1
          else
-            zeta(k+j) = dum
+            bas % zeta(k+j) = dum
             if(idum.lt.1) call raise('E','negative primitive count')
             if(idum.gt.6) call raise('W','>6 primitives is not supported')
-            ng(j) = idum
+            bas % ng(j) = idum
             select case(chdum)
-            case('1s'); ityp(j) =  1
-            case('2s'); ityp(j) =  2
-            case('3s'); ityp(j) =  3
-            case('4s'); ityp(j) =  4
-            case('5s'); ityp(j) =  5
-         !  case('2p'); ityp(j) =  6
-         !  case('3p'); ityp(j) =  7
-         !  case('4p'); ityp(j) =  8
-         !  case('5p'); ityp(j) =  9
-         !  case('3d'); ityp(j) = 10
-         !  case('4d'); ityp(j) = 11
-         !  case('5d'); ityp(j) = 12
-         !  case('4f'); ityp(j) = 13
-         !  case('5f'); ityp(j) = 14
-         !  case('5g'); ityp(j) = 15
+            case('1s'); bas % ityp(j) =  1
+            case('2s'); bas % ityp(j) =  2
+            case('3s'); bas % ityp(j) =  3
+            case('4s'); bas % ityp(j) =  4
+            case('5s'); bas % ityp(j) =  5
+         !  case('2p'); bas % ityp(j) =  6
+         !  case('3p'); bas % ityp(j) =  7
+         !  case('4p'); bas % ityp(j) =  8
+         !  case('5p'); bas % ityp(j) =  9
+         !  case('3d'); bas % ityp(j) = 10
+         !  case('4d'); bas % ityp(j) = 11
+         !  case('5d'); bas % ityp(j) = 12
+         !  case('4f'); bas % ityp(j) = 13
+         !  case('5f'); bas % ityp(j) = 14
+         !  case('5g'); bas % ityp(j) = 15
             case default
                call raise('W',chdum//' functions are not implemented, using 1s')
-               ityp(j) = 1
+               bas % ityp(j) = 1
             end select
          endif
       enddo
       !* save some informations on the basis functions
-      aoc(1,i) = k+1
-      aoc(2,i) = k+ibf
+      bas % aoc(1,i) = k+1
+      bas % aoc(2,i) = k+ibf
       k=k+ibf
    enddo
 !* we already cover part of this error, but lets check anyway

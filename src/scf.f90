@@ -469,7 +469,7 @@ subroutine rhf_direct &
            &   S,V,T,zeta,aoc,ng,ityp,X,P,H,F,C,eps,e)
    use iso_fortran_env, only : id => output_unit
    use precision, only : wp => dp
-   use ints,      only : integrals => intdriver_qcs
+   use ints,      only : integrals => intdriver_qcs_s
    use diis,      only : build_diis,diis_fock
    implicit none
    integer, intent(in)    :: nat
@@ -595,7 +595,7 @@ subroutine uhf_direct &
            &   S,V,T,zeta,aoc,ng,ityp,X,Pa,Pb,H,Fa,Fb,Ca,Cb,epsa,epsb,e)
    use iso_fortran_env, only : id => output_unit
    use precision, only : wp => dp
-   use ints,      only : integrals => intdriver_qcs
+   use ints,      only : integrals => intdriver_qcs_s
    use diis,      only : build_diis,diis_fock
    implicit none
    integer, intent(in)    :: nat
@@ -934,7 +934,7 @@ subroutine rhf_delta &
            &   S,V,T,zeta,aoc,ng,ityp,X,P,H,F,C,eps,e)
    use iso_fortran_env, only : id => output_unit
    use precision, only : wp => dp
-   use ints,      only : integrals => intdriver_qcs
+   use ints,      only : integrals => intdriver_qcs_s
    use diis,      only : build_diis,diis_fock
    implicit none
    integer, intent(in)    :: nat

@@ -1,4 +1,8 @@
 module opt
+   use precision, only : wp => dp
+   implicit none
+
+   real(wp),parameter :: eta=0.01_wp
 
 contains
 
@@ -31,11 +35,10 @@ subroutine geoopt_sd(nat,nbf,nocc,at,xyz,zeta,aoc,ng,ityp,first, &
    character(len=*),intent(in) :: acc
 
    integer  :: iter
-   real(wp) :: enuc,eold,gnorm,eta
-   parameter (eta=0.01_wp)
+   real(wp) :: enuc,eold,gnorm
 
    print'(a)'
-   print'(''=========================================='')'
+   print'(72(''=''))'
    print'('' steepest decent geometry optimization'')'
 
    call integrals(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T,eri)
@@ -59,7 +62,7 @@ subroutine geoopt_sd(nat,nbf,nocc,at,xyz,zeta,aoc,ng,ityp,first, &
       gnorm = sqrt(sum( g**2 ))
       if (gnorm.gt.500.0_wp) call raise('W','|G|>500, something went wrong!')
       print'(a)'
-      print'(''=[ITER]=========[E(SCF)]===========[|∇E|]='')'
+      print'(''=[ITER]=========[E(SCF)]===========[|∇E|]''31(''=''))'
       print'(x,i5,x,f16.'//acc//',x,f16.'//acc//')',iter,e,gnorm
       if(abs(e-eold).lt.ethr) exit opt
       eold = e

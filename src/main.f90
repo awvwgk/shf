@@ -27,6 +27,8 @@ program shf
    use scf
    use mbpt
    use cc
+   use ci
+!  use rpa
 
 !* some analysis
    use density
@@ -53,6 +55,7 @@ program shf
    integer, allocatable :: aoc(:,:)
    real(wp),allocatable :: g(:,:)
    real(wp) :: e,ecorr
+   type(basis) :: bas
    type(tmesh) :: mesh
 
 !* integrals and stuff
@@ -115,7 +118,11 @@ program shf
    chacc = trim(adjustl(chacc))
 
 !* read the input file
-   call rdinput(fname,nat,nel,nbf,at,xyz,zeta,aoc,ng,ityp,C)
+   call rdinput(fname,nat,nel,nbf,at,xyz,bas,C)
+   allocate( zeta(nbf),  source = bas % zeta )
+   allocate( aoc(2,nat), source = bas % aoc )
+   allocate( ityp(nbf),  source = bas % ityp )
+   allocate( ng(nbf),    source = bas % ng )
 
 !* sanity check
    if (nuhf.eq.-1) then ! not set before, set here
@@ -142,7 +149,7 @@ program shf
    endif
 
 !* print some information on the calculation
-   call prinput(fname,nat,nel,nocc,nalp,nbet,nbf,at,xyz,zeta,aoc,ng,brsym)
+   call prinput(fname,nat,nel,nocc,nalp,nbet,nbf,at,xyz,bas,brsym)
 
    select case(extmode)
 !* extmode sets:
@@ -154,7 +161,7 @@ program shf
 !  2 -> CCSD
 !  3 -> CCSD(T)
 
-   case(0) !* scf calculation
+   case(0,2) !* scf calculation, excited state calculations
 
    if (direct_scf) then
       allocate( S(nbf,nbf),V(nbf,nbf),T(nbf,nbf), &
@@ -244,6 +251,8 @@ program shf
 
 !* that's it, no MP2 or CC for you in unrestricted cases
    if (wftlvl.gt.0) call raise('E','Only HF supported for unrestricted case')
+!* no excited states for you in unrestricted cases
+   if (extmode.eq.2) call raise('E','Excited states for UHF not implemented')
 
    else !* RHF
 
@@ -312,11 +321,13 @@ program shf
    call prdens(mesh,chacc)
    endif
 
+   if (extmode.eq.0) then
+
    if (wftlvl.ge.1) then
       if (direct_scf) call raise('E','No ERIs have been calculated!')
-      call start_timing(4)
 !     print'('' * doing Θ(N⁸) integral transformation'')'
 !     call teitrafo_N8(nbf,eri,C)
+      call start_timing(4)
       print'('' * doing Θ(N⁵) integral transformation'')'
       call teitrafo(nbf,eri,C)
 
@@ -328,7 +339,7 @@ program shf
       call stop_timing(4)
 
       if (wftlvl.ge.2) then !* CCD
-         e = e - ecorr ! remov MP2 energy
+         e = e - ecorr ! remove MP2 energy
          if (allocated(F)) deallocate(F)
          allocate( F(2*nbf,2*nbf),tei(2*nbf,2*nbf,2*nbf,2*nbf),  &
          &         source = 0.0_wp )
@@ -341,9 +352,31 @@ program shf
          call stop_timing(5)
          e = e + ecorr
       endif !* CCD
-   endif
+   endif !* extmode(post-HF)
+
+   else !* extmode(excited states)
+      print'('' * doing Θ(N⁵) integral transformation'')'
+      call start_timing(4)
+      call teitrafo(nbf,eri,C)
+      if (allocated(F)) deallocate(F)
+      allocate( F(2*nbf,2*nbf),tei(2*nbf,2*nbf,2*nbf,2*nbf),  &
+      &         source = 0.0_wp )
+      call chem2phys(nbf,eri,tei)
+      call onetrafo(nbf,H,C)
+      call spinfockian(nbf,nel,F,H,tei)
+      call stop_timing(4)
+
+      if (wftlvl.eq.1) then
+         call cis(nbf,nel,F,tei,chacc)
+      endif
+
+      if (wftlvl.eq.2) then
+         call raise('E','TD-HF not implemented yet')
+      endif
+
+   endif !* extmode
    
-   endif
+   endif !* (un)restricted
    
 !* Geometry optimization
    case(1)

@@ -13,10 +13,10 @@ subroutine help
    print'(3x,''-a, --acc <int>   '','// &
    &      'x,''convergence threshold'')'
 
-   print'(3x,''    --iter <int>  '','// &
+   print'(3x,''-i, --iter <int>  '','// &
    &      'x,''maximal number of iterations'')'
 
-   print'(3x,''    --direct      '','// &
+   print'(3x,''-d, --direct      '','// &
    &      'x,''use a direct SCF approach'')'
 
    print'(3x,''    --dens <file> '','// &
@@ -28,7 +28,7 @@ subroutine help
    print'(3x,''    --diis [int]  '','// &
    &      'x,''use a convergence accelerator in the SCF'')'
 
-   print'(3x,''    --uhf <na-nb> '','// &
+   print'(3x,''-u, --uhf <na-nb> '','// &
    &      'x,''do unrestricted Hartree-Fock'')'
 
    print'(3x,''    --mp2         '','// &
@@ -42,6 +42,12 @@ subroutine help
 
 !  print'(3x,''    --ccsd(t)     '','// &
 !  &      'x,''include also triple excitation pertubatively'')'
+
+   print'(3x,''    --tdhf        '','// &
+   &      'x,''calculate excited states with TD-HF'')'
+
+   print'(3x,''    --cis         '','// &
+   &      'x,''calculate excited states with RPA'')'
 
    print'(3x,''-v, --version     '','// &
    &      'x,''prints the version number and some literature'')'
@@ -59,7 +65,7 @@ subroutine banner
 end subroutine banner
 
 subroutine credits
-   call banner
+   call gnu_gpl
    print'(a)'
 
    print'(72(''-''))'
@@ -83,3 +89,19 @@ subroutine credits
    print'(72(''-''))'
 
 end subroutine credits
+
+subroutine gnu_gpl
+   print'(a)'
+   print'(" © 2017,2018 by Sebastian Ehlert")'
+   print'(a)'
+   print'(3x"This program is free software: you can redistribute it and/or")'
+   print'(3x"modify it under the terms of the GNU General Public License as")'
+   print'(3x"published by the Free Software Foundation, either version 3 of")'
+   print'(3x"the License, or (at your option) any later version.")'
+   print'(a)'
+   print'(3x"This program is distributed in the hope that it will be useful,")'
+   print'(3x"but WITHOUT ANY WARRANTY; without even the implied warranty of")'
+   print'(3x"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.")'
+   print'(a)'
+   print'(3x"See the GNU General Public License for more details.")'
+end subroutine

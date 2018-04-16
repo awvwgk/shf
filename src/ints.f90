@@ -1,5 +1,6 @@
 module ints
    use precision, only : wp => dp
+   use typedef,   only : basis
    implicit none
 
    public  :: integrals
@@ -10,18 +11,13 @@ module ints
    private :: factorial,binom,olap,gpt
 
    interface integrals
+   module procedure intdriver_all_s
+   module procedure intdriver_one_s
+   module procedure intdriver_tei_s
    module procedure intdriver_all
    module procedure intdriver_one
    module procedure intdriver_tei
    end interface integrals
-
-   type :: gauss(ng)
-      integer,len :: ng
-      integer  :: l
-      real(wp) :: point(3)
-      real(wp) :: alpha(ng)
-      real(wp) :: coeff(ng)
-   end type gauss
 
    intrinsic :: shape,reshape
 
@@ -175,39 +171,220 @@ module ints
 contains
 
 !* expand STO-NGs to gaussians
-subroutine expand_stong(nat,nbf,zeta,aoc,ng,ityp,sh2at,alpha,coeff)
+subroutine expand_stong(nat,nbf,bas)
    use precision, only : wp => dp
    use stong,     only : slater
    implicit none
    integer, intent(in)  :: nat
    integer, intent(in)  :: nbf
-   real(wp),intent(in)  :: zeta(nbf)
-   integer, intent(in)  :: aoc(2,nat)
-   integer, intent(in)  :: ng(nbf)
-   integer, intent(in)  :: ityp(nbf)
-   integer, intent(out) :: sh2at(nbf)
-   real(wp),intent(out) :: alpha(maxprim,nbf)
-   real(wp),intent(out) :: coeff(maxprim,nbf)
+   type(basis),intent(inout) :: bas
 
-   real(wp) :: ci(maxprim),cj(maxprim),alpi(maxprim),alpj(maxprim)
-   real(wp) :: ck(maxprim),cl(maxprim),alpk(maxprim),alpl(maxprim)
-   real(wp) :: sdum,tdum,vdum,eridum
-   real(wp) :: chrg(nat)
+   integer  :: i,ii
 
-   integer  :: i,j,ii,jj
-   integer  :: ishtyp,jshtyp,kshtyp,lshtyp
+   allocate( bas % alpha(maxprim,nbf), bas % coeff(maxprim,nbf),  &
+   &         source = 0.0_wp )
+   allocate( bas % sh2at(nbf), source = 0 ) 
 
    do i = 1, nat
-      do ii = aoc(1,i), aoc(2,i)
-         call slater(ityp(ii),ng(ii),zeta(ii),alpha(:,ii),coeff(:,ii)) 
-         sh2at(ii) = i
+      do ii = bas % aoc(1,i), bas % aoc(2,i)
+         bas % sh2at(ii) = i
+         call slater(bas % ityp(ii),bas % ng(ii),bas % zeta(ii),  &
+              &      bas % alpha(:,ii),bas % coeff(:,ii))
       enddo
    enddo
 
 end subroutine expand_stong
 
 !* driver for driver for calculation of integrals
-subroutine intdriver_all(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T,eri)
+subroutine intdriver_all(nat,nbf,at,xyz,bas,S,V,T,eri)
+   use precision, only : wp => dp
+   implicit none
+   integer, intent(in)  :: nat
+   integer, intent(in)  :: nbf
+   integer, intent(in)  :: at(nat)
+   real(wp),intent(in)  :: xyz(3,nat)
+   type(basis),intent(in) :: bas
+   real(wp),intent(out) :: S(nbf,nbf)
+   real(wp),intent(out) :: T(nbf,nbf)
+   real(wp),intent(out) :: V(nbf,nbf)
+!  real(wp),intent(out) :: eri(nbf,nbf,nbf,nbf)
+!* to save some memory this packing is possible
+!  real(wp),intent(out) :: S(nbf*(nbf+1)/2),V(nbf*(nbf+1)/2),T(nbf*(nbf+1)/2)
+   real(wp),intent(out) :: eri((nbf*(nbf+1)/2)*(nbf*(nbf+1)/2+1)/2)
+   real(wp),allocatable :: qcs(:,:)
+
+   allocate( qcs(nbf,nbf), source = 0.0_wp )
+
+   call intdriver_one(nat,nbf,at,xyz,bas,S,V,T)
+
+   call intdriver_qcs(nat,nbf,at,xyz,bas,qcs)
+   call intdriver_tei(nat,nbf,at,xyz,bas,qcs,eri)
+
+   deallocate(qcs)
+
+end subroutine intdriver_all
+
+!* driver for calculation of integrals
+subroutine intdriver_qcs(nat,nbf,at,xyz,bas,qcs)
+   use precision, only : wp => dp
+   use stong,     only : slater
+   implicit none
+   integer, intent(in)  :: nat
+   integer, intent(in)  :: nbf
+   integer, intent(in)  :: at(nat)
+   type(basis),intent(in) :: bas
+   real(wp),intent(in)  :: xyz(3,nat)
+   real(wp),intent(out) :: qcs(nbf,nbf)
+
+   real(wp) :: ci(maxprim),cj(maxprim),alpi(maxprim),alpj(maxprim)
+   real(wp) :: ck(maxprim),cl(maxprim),alpk(maxprim),alpl(maxprim)
+   real(wp) :: qijij
+   real(wp) :: chrg(nat)
+
+   integer  :: i,j,ii,jj,iat,jat
+   integer  :: ishtyp,jshtyp,kshtyp,lshtyp
+
+!$omp parallel private(i,j,iat,jat,alpi,alpj,ci,cj,qijij) &
+!$omp          &       shared(qcs)
+!$omp do schedule(dynamic)
+   do i = 1, bas % n
+      iat = bas % sh2at(i)
+      do j = 1, i
+         jat = bas % sh2at(i)
+         call qcsint(bas % ng(i),bas % ng(j), & ! ,ishtyp,jshtyp, &
+              &      xyz(:,iat),xyz(:,jat),  &
+              &      bas % alpha(:,i),bas % alpha(:,j), &
+              &      bas % coeff(:,i),bas % coeff(:,j), &
+              &      qijij)
+         qcs(i,j) = qijij
+         qcs(j,i) = qijij
+      enddo
+   enddo
+!$omp enddo
+!$omp endparallel
+
+end subroutine intdriver_qcs
+
+!* driver for calculation of integrals
+subroutine intdriver_one(nat,nbf,at,xyz,bas,S,V,T)
+   use precision, only : wp => dp
+   use stong,     only : slater
+   implicit none
+   integer, intent(in)  :: nat
+   integer, intent(in)  :: nbf
+   integer, intent(in)  :: at(nat)
+   real(wp),intent(in)  :: xyz(3,nat)
+   type(basis),intent(in) :: bas
+   real(wp),intent(out) :: S(nbf,nbf)
+   real(wp),intent(out) :: T(nbf,nbf)
+   real(wp),intent(out) :: V(nbf,nbf)
+!* to save some memory this packing is possible
+!  real(wp),intent(out) :: S(nbf*(nbf+1)/2),V(nbf*(nbf+1)/2),T(nbf*(nbf+1)/2)
+
+   real(wp) :: ci(maxprim),cj(maxprim),alpi(maxprim),alpj(maxprim)
+   real(wp) :: ck(maxprim),cl(maxprim),alpk(maxprim),alpl(maxprim)
+   real(wp) :: sdum,tdum,vdum,eridum
+   real(wp) :: chrg(nat)
+
+   integer  :: i,j,ii,jj,iat,jat
+   integer  :: ishtyp,jshtyp,kshtyp,lshtyp
+
+   chrg = real(at,wp)
+
+!$omp parallel private(i,j,iat,jat,alpi,alpj,ci,cj,sdum,vdum,tdum) &
+!$omp          &       shared(s,v,t)
+!$omp do schedule(dynamic)
+   do i = 1, bas % n
+      iat = bas % sh2at(i)
+      do j = 1, i
+         jat = bas % sh2at(i)
+         call oneint(bas % ng(i),bas % ng(j),nat,xyz,chrg, &
+              &      xyz(:,iat),xyz(:,jat),  &
+              &      bas % alpha(:,i),bas % alpha(:,j), &
+              &      bas % coeff(:,i),bas % coeff(:,j), &
+              &      sdum,tdum,vdum)
+         s(i,j) = sdum
+         s(j,i) = sdum
+         t(i,j) = tdum
+         t(j,i) = tdum
+         v(i,j) = vdum
+         v(j,i) = vdum
+      enddo
+   enddo
+!$omp enddo
+!$omp endparallel
+
+end subroutine intdriver_one
+
+!* driver for calculation of integrals
+subroutine intdriver_tei(nat,nbf,at,xyz,bas,qcs,eri)
+   use precision, only : wp => dp
+   use misc,      only : idx
+   use stong,     only : slater
+   implicit none
+   integer, intent(in)  :: nat
+   integer, intent(in)  :: nbf
+   integer, intent(in)  :: at(nat)
+   real(wp),intent(in)  :: xyz(3,nat)
+   type(basis),intent(in) :: bas
+   real(wp),intent(in)  :: qcs(nbf,nbf)
+!  real(wp),intent(out) :: eri(nbf,nbf,nbf,nbf)
+!* to save some memory this packing is possible
+   real(wp),intent(out) :: eri((nbf*(nbf+1)/2)*(nbf*(nbf+1)/2+1)/2)
+
+   real(wp) :: ci(maxprim),cj(maxprim),alpi(maxprim),alpj(maxprim)
+   real(wp) :: ck(maxprim),cl(maxprim),alpk(maxprim),alpl(maxprim)
+   real(wp) :: sdum,tdum,vdum,eridum
+
+   integer  :: i,j,k,l,iat,jat,kat,lat,limit
+   integer  :: ishtyp,jshtyp,kshtyp,lshtyp
+   integer  :: ij,kl,ijkl
+
+!$omp parallel private(i,j,k,l,iat,jat,kat,lat, &
+!$omp          &       limit,ij,kl,ijkl,eridum) &
+!$omp          &       shared(eri)
+!$omp do schedule(dynamic)
+   do i = 1, bas % n
+      iat = bas % sh2at(i)
+      do j = 1, i
+         jat = bas % sh2at(j)
+         ij = idx(i,j)
+         do k = 1, i
+            kat = bas % sh2at(k)
+            if (i.eq.k) then; limit=j; else; limit=k; endif
+            do l = 1, limit
+               lat = bas % sh2at(l)
+               kl = idx(k,l)
+               ijkl = idx(ij,kl)
+               if ((qcs(i,j)*qcs(k,l)).lt.s_thr) cycle
+               call twoint(bas % ng(i),bas % ng(j),  &
+                    &      bas % ng(k),bas % ng(l), &
+                    &      xyz(:,iat),xyz(:,jat),xyz(:,kat),xyz(:,lat), &
+                    &      bas % alpha(:,i),bas % alpha(:,j), &
+                    &      bas % alpha(:,k),bas % alpha(:,l), &
+                    &      bas % coeff(:,i),bas % coeff(:,j), &
+                    &      bas % coeff(:,k),bas % coeff(:,l), &
+                    &      eridum)
+               eri(ijkl) = eridum
+            !  eri(ii,jj,kk,ll) = eridum
+            !  eri(ii,jj,ll,kk) = eridum
+            !  eri(jj,ii,kk,ll) = eridum
+            !  eri(jj,ii,ll,kk) = eridum
+            !  eri(kk,ll,ii,jj) = eridum
+            !  eri(kk,ll,jj,ii) = eridum
+            !  eri(ll,kk,ii,jj) = eridum
+            !  eri(ll,kk,jj,ii) = eridum
+            enddo
+         enddo
+      enddo
+   enddo
+!$omp enddo
+!$omp endparallel
+
+end subroutine intdriver_tei
+
+!* driver for driver for calculation of integrals
+subroutine intdriver_all_s(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T,eri)
    use precision, only : wp => dp
    implicit none
    integer, intent(in)  :: nat
@@ -229,17 +406,17 @@ subroutine intdriver_all(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T,eri)
 
    allocate( qcs(nbf,nbf), source = 0.0_wp )
 
-   call intdriver_one(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T)
+   call intdriver_one_s(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T)
 
-   call intdriver_qcs(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs)
-   call intdriver_tei(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs,eri)
+   call intdriver_qcs_s(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs)
+   call intdriver_tei_s(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs,eri)
 
    deallocate(qcs)
 
-end subroutine intdriver_all
+end subroutine intdriver_all_s
 
 !* driver for calculation of integrals
-subroutine intdriver_qcs(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs)
+subroutine intdriver_qcs_s(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs)
    use precision, only : wp => dp
    use stong,     only : slater
    implicit none
@@ -283,10 +460,10 @@ subroutine intdriver_qcs(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs)
 !$omp enddo
 !$omp endparallel
 
-end subroutine intdriver_qcs
+end subroutine intdriver_qcs_s
 
 !* driver for calculation of integrals
-subroutine intdriver_one(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T)
+subroutine intdriver_one_s(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T)
    use precision, only : wp => dp
    use stong,     only : slater
    implicit none
@@ -340,10 +517,10 @@ subroutine intdriver_one(nat,nbf,at,xyz,zeta,aoc,ng,ityp,S,V,T)
 !$omp enddo
 !$omp endparallel
 
-end subroutine intdriver_one
+end subroutine intdriver_one_s
 
 !* driver for calculation of integrals
-subroutine intdriver_tei(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs,eri)
+subroutine intdriver_tei_s(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs,eri)
    use precision, only : wp => dp
    use misc,      only : idx
    use stong,     only : slater
@@ -416,7 +593,7 @@ subroutine intdriver_tei(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs,eri)
 !$omp enddo
 !$omp endparallel
 
-end subroutine intdriver_tei
+end subroutine intdriver_tei_s
 
 !* one electron integrals over s-functions
 pure subroutine oneint(npa,npb,nat,xyz,chrg,r_a,r_b,alp,bet,ci,cj, &
