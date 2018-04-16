@@ -61,6 +61,8 @@ $ s-hf li.in --uhf 1
 $ s-hf h2.in --uhf 2
 ```
 
+### post-HF methods
+
 To use a second order Møller-Plesset many-body pertubation theory calculation,
 use the ``--mp2`` flag. Currently only a O(N5) integral transformation is
 in use.
@@ -76,6 +78,24 @@ $ s-hf h2.in --ccd
 ```
 
 can be employed.
+
+### excited states calculation
+
+A crude implementation of CIS and TD-HF is present
+
+For CIS use `--cis` as
+
+```
+$ s-hf h2.in --cis
+```
+
+and for TD-HF use `--tdhf`
+
+```
+$ s-hf he.in --tdhf
+```
+
+### Further analysis
 
 For a density analysis a mesh can specified as
 
