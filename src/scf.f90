@@ -384,7 +384,7 @@ subroutine uhf_conventional &
       call build_density(nbf,nalp,Pa,Ca)
       call build_density(nbf,nbet,Pb,Cb)
       e = enuc+uescf(H,Fa,Fb,Pa,Pb,nbf)
-      rmsd = sqrt(sum((Pa-Pa_save)**2)) + sqrt(sum((Pb-Pb_save)**2))
+      rmsd = sqrt(sum((Pa-Pa_save)**2))/nbf + sqrt(sum((Pb-Pb_save)**2))/nbf
 
       write(id,'(x,i5)',advance='no') iter
       write(id,'(x,f16.'//acc//')',advance='no') e
@@ -568,7 +568,7 @@ subroutine rhf_direct &
       P_save = P
       call build_density(nbf,nocc,P,C)
       e = enuc+escf(H,F,P,nbf)
-      rmsd = sqrt( sum( (P-P_save)**2 ) )
+      rmsd = sqrt( sum( (P-P_save)**2 ) )/nbf
 
       write(id,'(x,i5)',advance='no') iter
       write(id,'(x,f16.'//acc//')',advance='no') e
@@ -709,7 +709,7 @@ subroutine uhf_direct &
       call build_density(nbf,nalp,Pa,Ca)
       call build_density(nbf,nbet,Pb,Cb)
       e = enuc+uescf(H,Fa,Fb,Pa,Pb,nbf)
-      rmsd = sqrt(sum((Pa-Pa_save)**2)) + sqrt(sum((Pb-Pb_save)**2))
+      rmsd = sqrt(sum((Pa-Pa_save)**2))/nbf + sqrt(sum((Pb-Pb_save)**2))/nbf
 
       write(id,'(x,i5)',advance='no') iter
       write(id,'(x,f16.'//acc//')',advance='no') e
@@ -777,8 +777,9 @@ subroutine direct_fock(nat,nbf,xyz,H,F,P,zeta,aoc,ng,ityp,qcs,pthr)
                            ijkl = idx(ij,kl)
                            if (done(ijkl)) cycle
                            done(ijkl) = .true.
-                           pmax = max(4*P(ii,jj),4*P(kk,ll),  &
-                           &          P(ii,kk),P(ii,ll),P(jj,kk),P(jj,ll))
+                           pmax = max(4*abs(P(ii,jj)),4*abs(P(kk,ll)),  &
+                           &          abs(P(ii,kk)),abs(P(ii,ll)),  &
+                           &          abs(P(jj,kk)),abs(P(jj,ll)))
                            if ((qcs(ii,jj)*qcs(kk,ll)*pmax).lt.pthr) cycle
                            if (ii.eq.jj) then
                               scij = 1.0_wp
@@ -873,9 +874,11 @@ subroutine direct_ufock(nat,nbf,xyz,H,Fa,Fb,Pa,Pb,zeta,aoc,ng,ityp,qcs,pthr)
                            done(ijkl) = .true.
                            Pkl = Pa(kk,ll) + Pb(kk,ll)
                            Pij = Pa(ii,jj) + Pb(ii,jj)
-                           pmax = max(2*Pij,2*Pkl,  &
-                           &          Pa(ii,kk),Pa(ii,ll),Pa(jj,kk),Pa(jj,ll),&
-                           &          Pb(ii,kk),Pb(ii,ll),Pb(jj,kk),Pb(jj,ll))
+                           pmax = max(4*abs(Pij),4*abs(Pkl),  &
+                           &          abs(Pa(ii,kk)),abs(Pa(ii,ll)),  &
+                           &          abs(Pa(jj,kk)),abs(Pa(jj,ll)),  &
+                           &          abs(Pb(ii,kk)),abs(Pb(ii,ll)),  &
+                           &          abs(Pb(jj,kk)),abs(Pb(jj,ll)))
                            if ((qcs(ii,jj)*qcs(kk,ll)*pmax).lt.pthr) cycle
                            if (ii.eq.jj) then
                               scij = 1.0_wp
@@ -924,5 +927,264 @@ subroutine direct_ufock(nat,nbf,xyz,H,Fa,Fb,Pa,Pb,zeta,aoc,ng,ityp,qcs,pthr)
    Fb = H + 0.5_wp*(Gb+transpose(Gb))
 
 end subroutine direct_ufock
+
+subroutine rhf_delta &
+           &  (nat,nbf,nocc,at,xyz,ethr,pthr,first, &
+           &   acc,maxiter,ldiis,maxdiis,startdiis, &
+           &   S,V,T,zeta,aoc,ng,ityp,X,P,H,F,C,eps,e)
+   use iso_fortran_env, only : id => output_unit
+   use precision, only : wp => dp
+   use ints,      only : integrals => intdriver_qcs
+   use diis,      only : build_diis,diis_fock
+   implicit none
+   integer, intent(in)    :: nat
+   integer, intent(in)    :: nbf
+   integer, intent(in)    :: nocc
+   integer, intent(in)    :: at(nat)
+   real(wp),intent(in)    :: xyz(3,nat)
+   real(wp),intent(in)    :: ethr
+   real(wp),intent(in)    :: pthr
+   logical, intent(inout) :: first
+   logical, intent(inout) :: ldiis
+   integer, intent(in)    :: maxiter
+   integer, intent(in)    :: maxdiis
+   integer, intent(in)    :: startdiis
+   real(wp),intent(in)    :: X(nbf,nbf)
+   real(wp),intent(in)    :: H(nbf,nbf)
+   real(wp),intent(out)   :: P(nbf,nbf)
+   real(wp),intent(inout) :: F(nbf,nbf)
+   real(wp),intent(inout) :: C(nbf,nbf)
+   real(wp),intent(out)   :: eps(nbf)
+   real(wp),intent(out)   :: e
+   real(wp),intent(in)    :: S(nbf,nbf)
+   real(wp),intent(in)    :: V(nbf,nbf)
+   real(wp),intent(in)    :: T(nbf,nbf)
+   real(wp),intent(in)    :: zeta(nbf)
+   integer, intent(in)    :: aoc(2,nat)
+   integer, intent(in)    :: ng(nbf)
+   integer, intent(in)    :: ityp(nbf)
+   character(len=*),intent(in) :: acc
+
+   integer  :: iter,err,i,j,ij
+   real(wp) :: enuc,eold,rmsd
+   real(wp) :: ekin,epot,ec,ex
+   real(wp),allocatable :: P_save(:,:)
+   real(wp),allocatable :: dP(:,:)
+   real(wp),allocatable :: qcs(:,:)
+
+!* DIIS
+   real(wp) :: emax
+   real(wp),allocatable :: emat(:,:,:),F_save(:,:,:),cdiis(:),SS(:,:)
+
+   write(id,'(a)')
+   write(id,'(72(''-''))')
+   write(id,'('' Restricted Hartree-Fock SCF calculation'')')
+
+   allocate( P_save(nbf,nbf),dP(nbf,nbf),qcs(nbf,nbf),  &
+   &         source=0.0_wp )
+
+   if (ldiis) then
+   allocate( emat(nbf,nbf,maxdiis),F_save(nbf,nbf,maxdiis), &
+   &         cdiis(maxdiis+1), source=0.0_wp )
+   endif
+
+   call nnrep(enuc,nat,at,xyz)
+   call integrals(nat,nbf,at,xyz,zeta,aoc,ng,ityp,qcs)
+
+   call build_density(nbf,nocc,P,C)
+!* debug
+!  call prmat(F,nbf,nbf,name='F')
+!  call prmat(P,nbf,nbf,name='P')
+!  call prmat(C,nbf,nbf,name='C')
+
+   eold = enuc+escf(H,F,P,nbf)
+   iter = 0
+
+   write(id,'(1(''-'')''[ITER]'')',   advance='no')
+   write(id,'(9(''-'')''[E(SCF)]'')', advance='no')
+   write(id,'(8(''-'')''[ΔE(SCF)]'')',advance='no')
+   write(id,'(7(''-'')''[RMS(P)]'')', advance='no')
+   if (ldiis) then
+      write(id,'(5(''-'')''[max[F,P]]'')',advance='no')
+      write(id,'(1(''-''))')
+   else
+      write(id,'(15(''-''))')
+   endif
+   write(id,'(x,i5,x,f16.'//acc//')'),iter,eold
+
+!* unrolled one iteration from the loop by hand to create the
+!  first Fockian in a direct way
+   iter = 1
+   if (iter.gt.maxiter) call raise('E','SCF did not converge')
+   call direct_fock(nat,nbf,xyz,H,F,P,zeta,aoc,ng,ityp,qcs,pthr)
+
+   if (ldiis) then !* DIIS
+   call build_diis(nbf,iter,maxdiis,S,F,P,F_save,emat,emax,cdiis,ldiis)
+   if (ldiis) then
+   if (iter.ge.startdiis) then !* start DIIS
+      if (iter.eq.startdiis) write(id,'('' * starting DIIS'')')
+      call diis_fock(nbf,iter,maxdiis,F,F_save,cdiis)
+   endif !* start DIIS
+   else
+      write(id,'('' * shutting down DIIS'')')
+      deallocate( F_save,emat,cdiis )
+   endif
+   endif !* DIIS
+      
+   call roothaan_hall(nbf,X,F,C,eps,err)
+   if(err.ne.0) call raise('E','solving Roothaan-Hall eq. failed')
+   P_save = P
+   call build_density(nbf,nocc,P,C)
+   dP = P - P_save
+   e = enuc+escf(H,F,P,nbf)
+   rmsd = sqrt( sum( dP**2 ) )/nbf
+
+   write(id,'(x,i5)',advance='no') iter
+   write(id,'(x,f16.'//acc//')',advance='no') e
+   write(id,'(x,f16.'//acc//')',advance='no') e-eold
+   write(id,'(x,f14.'//acc//')',advance='no') rmsd
+   if (ldiis) write(id,'(x,f14.'//acc//')',advance='no') emax
+   write(id,'(a)')
+
+   eold = e
+
+!* now for the leftover iterations, we use a delta SCF approach
+!  so only density differences will be used
+   scf: do
+      iter = iter+1
+      if (iter.gt.maxiter) call raise('E','SCF did not converge')
+      call delta_fock(nat,nbf,xyz,F,dP,zeta,aoc,ng,ityp,qcs,ethr/iter)
+
+      if (ldiis) then !* DIIS
+      call build_diis(nbf,iter,maxdiis,S,F,P,F_save,emat,emax,cdiis,ldiis)
+      if (ldiis) then
+      if (iter.ge.startdiis) then !* start DIIS
+         if (iter.eq.startdiis) write(id,'('' * starting DIIS'')')
+         call diis_fock(nbf,iter,maxdiis,F,F_save,cdiis)
+      endif !* start DIIS
+      else
+         write(id,'('' * shutting down DIIS'')')
+         deallocate( F_save,emat,cdiis )
+      endif
+      endif !* DIIS
+      
+      call roothaan_hall(nbf,X,F,C,eps,err)
+      if(err.ne.0) call raise('E','solving Roothaan-Hall eq. failed')
+      P_save = P
+      call build_density(nbf,nocc,P,C)
+      dP = P - P_save
+      e = enuc+escf(H,F,P,nbf)
+      rmsd = sqrt( sum( dP**2 ) )
+
+      write(id,'(x,i5)',advance='no') iter
+      write(id,'(x,f16.'//acc//')',advance='no') e
+      write(id,'(x,f16.'//acc//')',advance='no') e-eold
+      write(id,'(x,f14.'//acc//')',advance='no') rmsd
+      if (ldiis) write(id,'(x,f14.'//acc//')',advance='no') emax
+      write(id,'(a)')
+
+      if((abs(e-eold).lt.ethr).and.rmsd.lt.pthr) exit scf
+      eold = e
+
+   enddo scf
+   first=.false.
+
+   write(id,'(72(''-''))')
+   write(id,'('' FINAL SCF ENERGY'',f53.'//acc//')') e
+   write(id,'(72(''-''))')
+
+end subroutine rhf_delta
+
+subroutine delta_fock(nat,nbf,xyz,F,dP,zeta,aoc,ng,ityp,qcs,pthr)
+   use precision, only : wp => dp
+   use ints,      only : maxprim,twoint
+   use stong,     only : slater
+   use misc,      only : idx
+   implicit none
+   integer, intent(in)  :: nat
+   integer, intent(in)  :: nbf
+   real(wp),intent(in)  :: xyz(3,nat)
+   real(wp),intent(in)  :: zeta(nbf)
+   integer, intent(in)  :: aoc(2,nat)
+   integer, intent(in)  :: ng(nbf)
+   integer, intent(in)  :: ityp(nbf)
+   real(wp),intent(in)  :: qcs(nbf,nbf)
+   real(wp),intent(in)  :: pthr
+   real(wp),intent(in)  :: dP(nbf,nbf)
+   real(wp),intent(out) :: F(nbf,nbf)
+
+   integer  :: i,ii,j,jj,k,kk,l,ll
+   integer  :: ij,kl,ijkl,limit
+   real(wp) :: ci(maxprim),cj(maxprim),alpi(maxprim),alpj(maxprim)
+   real(wp) :: ck(maxprim),cl(maxprim),alpk(maxprim),alpl(maxprim)
+   real(wp) :: eri,scij,sckl,scijkl,degscal,pmax
+   real(wp),allocatable :: G(:,:)
+   logical  :: done((nbf*(nbf+1)/2)*(nbf*(nbf+1)/2+1)/2)
+
+   allocate( G(nbf,nbf), source=0.0_wp )
+   done = .false.
+
+   do i = 1, nat
+      do j = 1, i
+         do k = 1, i
+            if (i.eq.k) then; limit=j; else; limit=k; endif
+            do l = 1, limit
+               do ii = aoc(1,i), aoc(2,i)
+                  !* on-the-fly expansion
+                  call slater(ityp(ii),ng(ii),zeta(ii),alpi,ci)
+                  do jj = aoc(1,j), aoc(2,j)
+                     ij = idx(ii,jj)
+                     call slater(ityp(jj),ng(jj),zeta(jj),alpj,cj)
+                     do kk = aoc(1,k), aoc(2,k)
+                        call slater(ityp(kk),ng(kk),zeta(kk),alpk,ck)
+                        do ll = aoc(1,l), aoc(2,l)
+                           kl = idx(kk,ll)
+                           ijkl = idx(ij,kl)
+                           if (done(ijkl)) cycle
+                           done(ijkl) = .true.
+                           pmax = max(4*abs(dP(ii,jj)),4*abs(dP(kk,ll)),  &
+                           &          abs(dP(ii,kk)),abs(dP(ii,ll)),  &
+                           &          abs(dP(jj,kk)),abs(dP(jj,ll)))
+                           if ((qcs(ii,jj)*qcs(kk,ll)*pmax).lt.pthr) cycle
+                           if (ii.eq.jj) then
+                              scij = 1.0_wp
+                           else
+                              scij = 2.0_wp
+                           endif
+                           if (kk.eq.ll) then
+                              sckl = 1.0_wp
+                           else
+                              sckl = 2.0_wp
+                           endif
+                           if ((ii.eq.kk).and.(jj.eq.ll)) then
+                              scijkl = 1.0_wp
+                           else
+                              scijkl = 2.0_wp
+                           endif
+                           degscal = scij*sckl*scijkl
+                           call slater(ityp(ll),ng(ll),zeta(ll),alpl,cl)
+                           call twoint(ng(ii),ng(jj),ng(kk),ng(ll), &
+                           !    &      ishtyp,jshtyp,kshtyp,lshtyp, &
+                                &      xyz(:,i),xyz(:,j),xyz(:,k),xyz(:,l), &
+                                &      alpi,alpj,alpk,alpl,ci,cj,ck,cl, &
+                                &      eri)
+                           G(ii,jj) = G(ii,jj) + degscal*eri*dP(kk,ll)
+                           G(kk,ll) = G(kk,ll) + degscal*eri*dP(ii,jj)
+                           G(ii,kk) = G(ii,kk) - 0.25_wp*degscal*eri*dP(jj,ll)
+                           G(jj,ll) = G(jj,ll) - 0.25_wp*degscal*eri*dP(ii,kk)
+                           G(ii,ll) = G(ii,ll) - 0.25_wp*degscal*eri*dP(jj,kk)
+                           G(jj,kk) = G(jj,kk) - 0.25_wp*degscal*eri*dP(ii,ll)
+                        enddo
+                     enddo
+                  enddo
+               enddo
+            enddo
+         enddo
+      enddo
+   enddo
+
+   F = F + 0.5_wp*(G+transpose(G))
+
+end subroutine delta_fock
 
 end module scf
