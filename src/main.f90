@@ -332,14 +332,13 @@ program shf
       call teitrafo(nbf,eri,C)
 
 !* second order Møller-Plesset many-body pertubation theory
-      if (wftlvl.ge.1) then !* MP2
+      if (wftlvl.eq.1) then !* MP2
          call mp2(nbf,nocc,eri,eps,ecorr,chacc)
          e = e + ecorr
       endif !* MP2
       call stop_timing(4)
 
-      if (wftlvl.ge.2) then !* CCD
-         e = e - ecorr ! remove MP2 energy
+      if (wftlvl.ge.2) then !* CC
          if (allocated(F)) deallocate(F)
          allocate( F(2*nbf,2*nbf),tei(2*nbf,2*nbf,2*nbf,2*nbf),  &
          &         source = 0.0_wp )
@@ -348,10 +347,15 @@ program shf
          call onetrafo(nbf,H,C)
          call spinfockian(nbf,nel,F,H,tei)
          call prmat(F,2*nbf,2*nbf,name='Spin Fockian')
-         call ccd(nbf,nel,F,tei,ethr,chacc,maxiter,ecorr)
+         if (wftlvl.eq.2) then !* CCD
+            call ccd(nbf,nel,F,tei,ethr,chacc,maxiter,ecorr)
+         endif
+         if (wftlvl.eq.3) then !* CCSD
+            call ccsd(nbf,nel,F,tei,ethr,chacc,maxiter,ecorr)
+         endif
          call stop_timing(5)
          e = e + ecorr
-      endif !* CCD
+      endif !* CC
    endif !* extmode(post-HF)
 
    else !* extmode(excited states)
@@ -418,7 +422,7 @@ program shf
    if (.not.direct_scf) call prtiming(2,'int')
    call prtiming(3,'scf')
    if (extmode.eq.0) then
-   if (wftlvl.ge.1) call prtiming(4,'mp2')
+   if (wftlvl.eq.1) call prtiming(4,'mp2')
    if (wftlvl.eq.2) call prtiming(5,'ccd')
    else
    if (wftlvl.eq.1) call prtiming(4,'cis')
